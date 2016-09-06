@@ -1,0 +1,35 @@
+h1 { width: 100%; margin-top: 1em; text-align: center; color: #44a;
+     font-size: 24pt; font-family: sans-serif; }
+
+h2 { width: 100%; margin-top: 1em; color: #44a;
+     font-size: 15pt; font-family: sans-serif; }
+#left {
+    float: left;
+}
+#right {
+    float: left;
+}
+#content {
+    width: 98%;
+    display: block;
+    margin: 10 auto;
+}
+.known {
+    background-color: #0AF; 
+    background-color: rgba(0, 167, 255, 0.5);
+}
+.unknown {
+    background-color: #F6F;
+    background-color: rgba(240, 100, 255, 0.5);
+}
+.mesh { background-color: #EEE; color: #08D; font-style: italic; font-weight: bold; }
+.mallet { background-color: #EDE; color: #820; font-style: italic; font-weight: bold; }
+#footer {
+ margin: 0px 5px 5px 5px;
+ display: inline; /* IE Hack */
+ padding: 4px;
+ float: left;
+ width: 97.7%;
+ border: 1px solid #ccc;
+ background-color: rgb(97%,97%,99%);
+}

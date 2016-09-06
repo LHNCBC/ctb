@@ -1,0 +1,14 @@
+#! /bin/csh -xv
+# Call this script with the name of the index as the argument. (see ifconfig.)
+
+setenv DSNAME 2016AA
+setenv HEAPSIZE -Xmx7000m
+setenv CLASSPATH lib/irutils-2.0-SNAPSHOT.jar
+setenv PROJECTROOT data/ivf/${DSNAME}
+
+java   -Dindex.path=${PROJECTROOT}/ifindices \
+       -Dtable.path=${PROJECTROOT}/tables \
+       -Difbuild.lowercase.keys=true \
+       -Difbuild.verbose=true \
+       ${HEAPSIZE} irutils.IFBuild $*
+
