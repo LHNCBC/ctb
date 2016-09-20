@@ -108,12 +108,14 @@
          )))
 
 (defn expand-termlist
-  "Given a termlist determine expansions that occur in knowledge source (UMLS) "
+  "Given a termlist, determine expansions that occur in knowledge
+  source (UMLS) "
   [termlist]
   (reduce (fn [newmap term]
             (let [term-smap (expand-term term)]
               (assoc newmap
                      (:term term-smap)
-                     (set (apply concat (mapv #(second %)
-                                              (:term-expansion-lists term-smap)))))))
+                     (set (apply concat
+                                 (mapv #(second %)
+                                       (:term-expansion-lists term-smap)))))))
           {} termlist))

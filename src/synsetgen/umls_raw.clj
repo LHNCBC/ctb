@@ -5,6 +5,8 @@
             [skr.rrf-mrsty-utils :as rrf-mrsty]
             [skr.mwi-utilities :as mwi]))
 
+;; # Functions to process raw UMLS files
+
 (defonce ^:dynamic *memoized-normalize-ast-string* (memoize mwi/normalize-ast-string))
 
 (defn load-mrconso

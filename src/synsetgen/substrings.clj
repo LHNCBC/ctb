@@ -1,6 +1,8 @@
 (ns synsetgen.substrings
   (:require [clojure.string :refer [split join]]))
 
+;; # Substring Functions
+
 (defn generate-ordered-subsets
   [instr]
   (let [tokens (split instr #" ")
