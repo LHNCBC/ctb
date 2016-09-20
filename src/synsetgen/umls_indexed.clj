@@ -33,13 +33,22 @@
 (defn lookup [index term]
   (vec (.getValue (.lookup index (.toLowerCase term)))))
 
+;; Paths to tables used by Java-based inverted file library
+
 (defonce ^:dynamic *dataroot* "data/ivf/2016AA")
 (defonce ^:dynamic *tablepath* (format "%s/%s" *dataroot* "tables"))
 (defonce ^:dynamic *indexpath* (format "%s/%s" *dataroot* "ifindices"))
+
+;; Container for inverted file references
+
 (defonce ^:dynamic *container* (get-container *tablepath* *indexpath*))
+
+;; Inverted file references
+
 (defonce ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
 (defonce ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
 (defonce ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
+;; Currently disabled:
 ;; (defonce ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
 (defonce ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
 
@@ -100,10 +109,17 @@
   [cui]
   (:str (first (get-mrconso-records-with-preferred-name cui))))
 
-;; (defn get-mrsat-records
-;;   [cui]
-;;   (map mrsat-line-record-to-map
-;;        (lookup *mrsat-index* cui)))
+(defn get-mrsat-records
+  "Get MRSAT records for cui (concept unique identifier) (currently
+  not implemented)."
+  [cui]
+  ;; (map mrsat-line-record-to-map (lookup *mrsat-index* cui))
+  )
 
+(defn get-mrsty-records
+  "Get MRSTY records for cui (concept unique identifier)."
+  [cui]
+  (map mrsty-line-record-to-map
+       (lookup *mrsty-index* cui)))
 
 
