@@ -1,16 +1,16 @@
 (ns synsetgen.process
   (:require [clojure.string :refer [join split trim lower-case]]
             [clojure.java.io :as io]
-            [clojure.set :refer [union]]
+            [clojure.set :refer [union intersection difference]]
             [clj-time.core :refer [time-now]]
             [synsetgen.umls-indexed :as umls-indexed]
-            [synsetgen.core]
+            [synsetgen.synsetgen :as synset]
             [synsetgen.umls-indexed :refer [reinit-index]]
             [synsetgen.keylistexpansion :refer [expand-termlist]])
   (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
            (java.io File)))
 
-;; # Processing Backend Functions
+;; # Backend Processing Functions
 
 (def ^:dynamic *umls-version* "2016AA")
 (def ^:dynamic *ivfdirname* "data/ivf")
@@ -31,7 +31,7 @@
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
         term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
         cui-concept-map (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)]
-    (synsetgen.core/generate-term-cui-termset-map termlist
+    (synset/generate-term-cui-termset-map termlist
                                                   term-conceptid-map
                                                   cui-concept-map)))
 
@@ -45,7 +45,7 @@
    :lat "ENG"
    :ts "S"
    :lui "LXXXXXXX"
-   :stt ""
+   :stt "VCW"
    :sui "SXXXXXXX"
    :ispref "N"
    :aui "AXXXXXXX"
@@ -96,7 +96,7 @@
                                        unmapped-term-expanded-conceptid-map)
         merged-cui-concept-map (merge-cui-concept-maps cui-concept-map unmapped-term-cui-concept-map)
         ]
-    (synsetgen.core/generate-term-cui-conceptinfo-map termlist 
+    (synset/generate-term-cui-conceptinfo-map termlist 
                                                       (merge term-conceptid-map
                                                              unmapped-term-expanded-conceptid-map)
                                                       merged-cui-concept-map)))
@@ -119,6 +119,28 @@
   (with-open [wtr (io/writer "resources/public/output/filtered-termlist.edn")]
     (.write wtr (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
 
+;; ## Synonym Set (synset) representation
+;;
+;;     user> (pprint filtered-synset)
+;;     {"rlq abd pain"
+;;      {"C0694551"
+;;       ("Right lower quadrant pain"
+;;        "abdominal pain in the right lower belly"
+;;        "rlq abd pain"
+;;        "lower pain quadrant right"
+;;        ...
+;;      )},
+;;      "llq abd pain"
+;;      {"C0238551"
+;;       ("LLQ abdominal pain"
+;;        "lower left quadrant pain"
+;;        "llq pain"
+;;        "abdominal pain in the left lower belly (LLQ)"
+;;        "abdominal pain left lower quadrant"
+;;         ...
+;;      )}}
+;;     nil
+
 (defn synset-view-params-to-filtered-synset
   [params]
   (reduce (fn [newmap [key val]]
@@ -127,27 +149,60 @@
           {} (filterv #(= (second %) "on")
                       (dissoc params "submit"))))
 
+(defn list-synset-cuiset
+  "List cuis in synset." 
+  [synset]
+  (set (mapv #(-> % second first first) synset)))
+
+(defn add-mrconso-records
+  [cui mrconso-record-list termset]
+  (concat mrconso-record-list 
+          (map #(mrconso-record-for-term cui %)
+               termset)))
+
+(defn add-unmapped-terms-to-cui-concept-map
+  "Add any unmapped-terms in synset to cui-concept-map."
+  [cui-concept-map synset]
+  (reduce (fn [newmap0 [parent-term cui-termlist-map]]
+            (reduce (fn [newmap1 [cui termlist]]
+                      (let [termset (set termlist)
+                            mrconso-termset (set (map #(:str %) (newmap1 cui)))
+                            missing-termset (difference termset mrconso-termset)]
+                                        ; add terms in missing-termset
+                        (if (empty? missing-termset)
+                          newmap1
+                          (assoc newmap1 cui (add-mrconso-records cui (newmap1 cui) missing-termset)))))
+                    newmap0 cui-termlist-map))
+          cui-concept-map synset))
+
 (defn process-filtered-synset
-  ""
-  [req]
-  (let [params (:params req)
+  "Generate MRCONSO and MRSTY files using termlist edited by user."
+  [request]
+  (let [params (:params request)
+        dataset (-> request :session :dataset) ; get :dataset value from :session value from request
         filtered-synset (synset-view-params-to-filtered-synset params)
+        filtered-synset-cuiset (list-synset-cuiset filtered-synset)
         termlist (keys filtered-synset)
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
-        term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
-        cui-concept-map (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)
-        cuiset (reduce (fn [newset [term concept-id-set]]
-                         (union newset (set concept-id-set)))
-                       #{} term-conceptid-map)]
-    (synsetgen.core/write-mrconso-from-cui-concept-map "resources/public/output/mrconso.rrf"
+        term-conceptid-set (union (umls-indexed/generate-term-conceptid-set termlist)
+                                  filtered-synset-cuiset)
+        cui-concept-map (add-unmapped-terms-to-cui-concept-map
+                         (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)
+                         filtered-synset)
+        cuiset (union (reduce (fn [newset [term concept-id-set]]
+                                (union newset (set concept-id-set)))
+                       #{} term-conceptid-map)
+                      filtered-synset-cuiset
+                      (set (keys cui-concept-map)))]
+    (.mkdir (io/file (format "resources/public/output/%s" dataset))) ; create directory for session
+    (synset/write-mrconso-from-cui-concept-map (format "resources/public/output/%s/mrconso.rrf" dataset)
                                                        cui-concept-map
                                                        filtered-synset)
-    (synsetgen.core/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
-                                          cuiset
-                                          "resources/public/output/mrsat.rrf")
-    (synsetgen.core/generate-custom-mrsty (str "input/" *umls-version* "/MRSTY.RRF")
-                                          cuiset
-                                          "resources/public/output/mrsty.rrf")
+    (synset/generate-custom-mrsty cuiset
+                                          (format "resources/public/output/%s/mrsty.rrf" dataset))
+    ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
+    ;; cuiset
+    ;;"resources/public/output/mrsat.rrf")
     ))
 
 (defn syntactically-simple?
@@ -159,8 +214,7 @@
   where the number of Minimal Syntactic Units is below some
   pre-determined threshold.
 
-"
-  [term]
+"  [term]
   (and
    (= (NLSStrings/eliminateNosString term) (lower-case term))
    (= (NLSStrings/eliminateMultipleMeaningDesignatorString term) term)

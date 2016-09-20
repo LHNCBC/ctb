@@ -12,7 +12,7 @@
                  [hiccup "1.0.5"]
                  [compojure "1.5.1"]
                  [ring/ring-core "1.5.0"]
-
+                 [ring/ring-jetty-adapter "1.4.0"]
                  [skr "0.1.0-SNAPSHOT"]
                  [lexicalsystems/lvg "2016"]
                  [clj-wordnet "0.1.0"]
@@ -23,4 +23,5 @@
          :init synsetgen.process/init}
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
-  )
+  :aot [synsetgen.core]
+  :main synsetgen.core)
