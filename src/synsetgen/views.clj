@@ -7,6 +7,11 @@
             [synsetgen.umls-indexed :refer [get-preferred-name]]
             [synsetgen.process :refer [syntactically-simple? list-data-set-names]]))
 
+;; # HTML Views
+;;
+(def ^{:dynamic true} *header-color*         "#CAE1F9")
+(def ^{:dynamic true} *data-color*           "#E5E4E2")
+(def ^{:dynamic true} *highlight-data-color* "#A9F5A9")
 (def ^:dynamic *front-page-title* "Home")
 
 (defn gen-header-simple
@@ -46,6 +51,7 @@
                 ]])))
 
 (defn expanded-termlist-review-page
+  "Generate Termlist Review page view"
   [synset]
   (view-layout "expanded termlist"
                (vec (concat [:table {:border "1"}]
@@ -59,6 +65,7 @@
 
 
 (defn termlist-submission-form
+  "Generate Termlist submission form page view"
   [title]
   (view-layout
    title
@@ -79,11 +86,13 @@
      ]]))
 
 (defn display-termlist
+  "Generate Termlist View." 
   [termlist]
   (view-layout "termlist"
                (vec (concat [:ul] (mapv #(vector :li %) termlist)))))
 
 (defn term-cui-mapping-page
+  "Generate Term -> CUI mapping page view" 
   [synset]
   (view-layout "expanded termlist"
                (vec (concat [:table {:border "1"}]
@@ -108,6 +117,7 @@
 
 
 (defn nested-synset-tables
+  "Generate Synonym Set Table view"  
   [synset]
   (vec
    (concat
@@ -127,6 +137,7 @@
                      synset))))
 
 (defn synset-table-page
+  "Generate Synonym Set Table Page View"  
   [synset]
   (view-layout
    "SynSet View"
@@ -178,8 +189,10 @@ jQuery(document).ready(function(){
                 ]])))
 
 (defn nested-synset-lists
+  "Generate Synonym Set Nested Tree List with Term selection
+  buttons. "
   [synset]
-  ;; [:div {:id "container"}
+  [:div {:id "container"}
    [:form {:class "list" :method "post" :action "/processfiltertermlist/"}
     (vec
      (concat
@@ -202,35 +215,35 @@ jQuery(document).ready(function(){
                                   cuimap)))])
             (into (sorted-map) synset))))
     [:input.action {:type "submit" :value "submit" :name "submit"}]]
-;;]
-)
+   ]
+  )
 
 (defn synset-list-page
+  "Generate Synonym Set Editing View"
   [synset]
   (view-layout-jquery
    "SynSet View"
    [:h1 "SynSet View"]
    (nested-synset-lists synset)))
 
-   
-
-
 (defn filtered-termlist-view
-  [req]
-  (view-layout "Filtered TermList"
-               [:h1 "Filtered Termlist has been processed"] 
-               [:h2 "MRCONSO.RRF"]
-               [:p "The file " [:a {:href "/output/mrconso.rrf"} [:code "mrconso.rrf"]] 
-                " has been created.  Click the "
-                [:a {:href "/output/mrconso.rrf"} "link"] " to download it. "]
-                [:p "Semantic type file:    " [:a {:href "/output/mrsty.rrf"} "mrsty.rrf"] ]
-                [:p "Source attribute file: " [:a {:href "/output/mrsat.rrf"} "mrsat.rrf"] ]
-               [:h2 "Filtered TermList"]
-               (vec (concat [:ul ]
-                            (mapv (fn [[k v]]
-                                    [:li (str k " -> " v)])
-                                  (sort
-                                   (dissoc (:params req) "submit")))))
-               ))
+  "View generated after processing termlist filtered by user."
+  [request]
+  (let [dataset (-> request :session :dataset)]
+    (view-layout "Filtered TermList"
+                 [:h1 "Filtered Termlist has been processed"] 
+                 [:h2 "MRCONSO.RRF"]
+                 [:p "The file " [:a {:href (format "/output/%s/mrconso.rrf" dataset)} [:code "mrconso.rrf"]] 
+                  " has been created.  Click the "
+                  [:a {:href (format "/output/%s/mrconso.rrf" dataset)} "link"] " to download it. "]
+                 [:p "Semantic type file:    " [:a {:href (format "/output/%s/mrsty.rrf" dataset)} [:code "mrsty.rrf"]]]
+                 ;; [:p "Source attribute file: " [:a {:href (format "/output/%smrsat.rrf" dataset)} "mrsat.rrf"] ]
+                 [:h2 "Filtered TermList"]
+                 (vec (concat [:ul ]
+                              (mapv (fn [[k v]]
+                                      [:li (str k " -> " v)])
+                                    (sort
+                                     (dissoc (:params request) "submit")))))
+               )))
 
 
