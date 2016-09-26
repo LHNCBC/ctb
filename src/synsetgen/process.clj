@@ -3,6 +3,7 @@
             [clojure.java.io :as io]
             [clojure.set :refer [union intersection difference]]
             [clj-time.core :refer [time-now]]
+            [digest]
             [synsetgen.umls-indexed :as umls-indexed]
             [synsetgen.synsetgen :as synset]
             [synsetgen.umls-indexed :refer [reinit-index]]
@@ -115,9 +116,21 @@
 
 
 (defn write-filtered-termlist
-  [req]
-  (with-open [wtr (io/writer "resources/public/output/filtered-termlist.edn")]
-    (.write wtr (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
+  ([req]
+   (write-filtered-termlist "resources/public/output/filtered-termlist.edn" req))
+  ([filename req]
+   (spit filename (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
+
+(defn list-term-synonyms
+  [params]
+  (sort 
+   (into []
+         (set
+          (mapv (fn [[key val]]
+                  (let [[term cui synonym] (split key #"\|")]
+                    (lower-case synonym)))
+                (filterv #(= (second %) "on")
+                         (dissoc params "submit")))))))
 
 ;; ## Synonym Set (synset) representation
 ;;
@@ -142,10 +155,12 @@
 ;;     nil
 
 (defn synset-view-params-to-filtered-synset
+  "Extract terms for synset from request parameters excluding submit
+  parameter."
   [params]
   (reduce (fn [newmap [key val]]
-            (let [[term cui variant] (split key #"\|")]
-              (assoc newmap term (assoc (newmap term) cui (conj (get (newmap term) cui) variant)))))
+            (let [[term cui synonym] (split key #"\|")]
+              (assoc newmap term (assoc (newmap term) cui (conj (get (newmap term) cui) synonym)))))
           {} (filterv #(= (second %) "on")
                       (dissoc params "submit"))))
 
@@ -177,33 +192,57 @@
 
 (defn process-filtered-synset
   "Generate MRCONSO and MRSTY files using termlist edited by user."
-  [request]
-  (let [params (:params request)
-        dataset (-> request :session :dataset) ; get :dataset value from :session value from request
-        filtered-synset (synset-view-params-to-filtered-synset params)
-        filtered-synset-cuiset (list-synset-cuiset filtered-synset)
-        termlist (keys filtered-synset)
-        term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
-        term-conceptid-set (union (umls-indexed/generate-term-conceptid-set termlist)
-                                  filtered-synset-cuiset)
-        cui-concept-map (add-unmapped-terms-to-cui-concept-map
-                         (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)
-                         filtered-synset)
-        cuiset (union (reduce (fn [newset [term concept-id-set]]
-                                (union newset (set concept-id-set)))
-                       #{} term-conceptid-map)
-                      filtered-synset-cuiset
-                      (set (keys cui-concept-map)))]
-    (.mkdir (io/file (format "resources/public/output/%s" dataset))) ; create directory for session
-    (synset/write-mrconso-from-cui-concept-map (format "resources/public/output/%s/mrconso.rrf" dataset)
-                                                       cui-concept-map
-                                                       filtered-synset)
-    (synset/generate-custom-mrsty cuiset
-                                          (format "resources/public/output/%s/mrsty.rrf" dataset))
-    ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
-    ;; cuiset
-    ;;"resources/public/output/mrsat.rrf")
-    ))
+  ([request]
+   (let [params (:params request)
+         {user :user
+          dataset :dataset} (:session request) ; Get :dataset and :user values
+                                               ; from :session part of request.
+         filtered-synset (synset-view-params-to-filtered-synset params)
+         termlist (keys filtered-synset)
+         synonyms-checksum (digest/sha-1 (join "|" (list-term-synonyms params)))
+         workdir (format "resources/public/output/%s/%s" user dataset)]
+     (write-filtered-termlist (str workdir "/filtered-termlist.edn" request))
+     ;; if result already exists with the same filtered termlist
+     ;; checksum then don't process it again.
+     (if (.exists (io/file workdir))
+       (if (.exists (io/file (str workdir "/synonyms.checksum")))
+         (let [saved-synonyms-checksum (slurp (str workdir "/synonyms.checksum"))]
+           (.println System/out (str "saved-synonyms-checksum: " saved-synonyms-checksum))
+           (.println System/out (str "synonyms-checksum: " synonyms-checksum))
+           (when (not= saved-synonyms-checksum synonyms-checksum)
+             (process-filtered-synset user dataset workdir termlist synonyms-checksum
+                                      filtered-synset)
+           )))
+       (process-filtered-synset user dataset workdir termlist synonyms-checksum
+                                filtered-synset)
+     )))
+  ([user dataset workdir
+    termlist synonyms-checksum filtered-synset]
+   (let [filtered-synset-cuiset (list-synset-cuiset filtered-synset)
+         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
+         term-conceptid-set (union (umls-indexed/generate-term-conceptid-set termlist)
+                                   filtered-synset-cuiset)
+         cui-concept-map (add-unmapped-terms-to-cui-concept-map
+                          (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)
+                          filtered-synset)
+         cuiset (union (reduce (fn [newset [term concept-id-set]]
+                                 (union newset (set concept-id-set)))
+                               #{} term-conceptid-map)
+                       filtered-synset-cuiset
+                       (set (keys cui-concept-map)))]
+                                        ; create directory for session
+       (.mkdirs (io/file workdir))
+       (synset/write-mrconso-from-cui-concept-map (str workdir "/mrconso.rrf")
+                                                  cui-concept-map
+                                                  filtered-synset)
+       (synset/generate-custom-mrsty cuiset
+                                     (str workdir "/mrsty.rrf"))
+       (spit (format (str workdir "/synonyms.checksum")) synonyms-checksum)
+       ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
+       ;;   cuiset 
+       ;;  (str workdir "/mrsat.rrf"))
+       )))
+
 
 (defn syntactically-simple?
   "Is string syntactically-simple and contains no NOS or NEC or
