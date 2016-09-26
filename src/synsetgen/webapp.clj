@@ -1,6 +1,7 @@
 (ns synsetgen.webapp
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [digest]
             [compojure.core :refer [defroutes GET POST ANY]]
             [compojure.route :refer [resources]]
             [ring.middleware.params :refer [wrap-params]]
@@ -20,20 +21,40 @@
                                        write-filtered-termlist
                                        process-filtered-synset]]))
 
-(defn set-session-var
-  "set session var dataset in response..."
-  ([session]
+;; # Current session and cookie information
+;;
+;; The cookie variable 'termtool-user' contains the current username
+;;
+;; The session variable 'user' also contains the current username,
+;; taken from 'termtool-user' cookie.
+;;
+;; The session variable 'dataset' is currenty set using the sha-1
+;; checksum of termlist supplied to the route POST /processtermlist/
+;; by the 'Synset List HTML form.
+;;
+(defn set-session-username
+  "set session var dataset in response...
+
+  WebBrowser state variables set by this function:
+
+  cookies:
+     termtool-user username for session.
+  sessioninfo:
+     user  - same as termtool-user"
+  ([cookies session]
    (if (:my-var session)
     {:body "Session variable already set"}
     {:body "Nothing in session, setting the var" 
      :session (assoc session :my-var "foo")}))
-  ([session body]
-   (if (:datasets session)
-     ;; add dataset if this is the second dataset
+  ([cookies session body]
+   (let [username (cond
+                    (contains? cookies :termtool-user) (:termtool-user cookies)
+                    (contains? session :user) (:user session)
+                    :else (str "user" (rand-int 100000)))]
      {:body body
-      :session (assoc session :datasets (conj (:datasets session) (str "user" (rand-int 100000))))}
-     {:body body
-      :session (assoc session :datasets (vector (str "user" (rand-int 100000))))})))
+      :cookies (assoc cookies :termtool-user username)
+      :session (assoc session :user username)})))
+
   
 ;; # Web Applications (Routes)
 ;;
@@ -43,23 +64,26 @@
 ;; * `/processtermlist/`       `(POST)` process input terms 
 ;; * `/filtertermlist/`        `(POST)` display expanded termlist form
 ;; * `/processfiltertermlist/` `(POST)` process expanded termlist using user's selections
-;;
 (defroutes
   webroutes
 
-  (GET "/" {session :session}
-    (set-session-var session (termlist-submission-form "Input Terms")))
+  (GET "/" {cookies :cookies session :session}
+    (set-session-username cookies session (termlist-submission-form "Input Terms")))
   
-  (POST "/processtermlist/" [termlist termlistfile cmd]
-     (case cmd
-       "synset list"  (synset-list-page
-                       (process-termlist termlist))  ;; primary 
-       "test0"        (display-termlist (mirror-termlist termlist)) ;; debugging
-       "test1"        (expanded-termlist-review-page (process-termlist termlist)) ;; debugging
-       "term->cui"    (term-cui-mapping-page (process-termlist termlist)) ;; debugging
-       "synset table" (synset-table-page (process-termlist termlist)) ;; debugging
-       (expanded-termlist-review-page (process-termlist termlist)) ; default
-       ))
+  (POST "/processtermlist/" {cookies :cookies session :sessions params :params }
+    (let [{cmd "cmd" termlist "termlist"} params]
+      (set-session-username
+       cookies
+       (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
+       (case cmd
+         "synset list"  (synset-list-page (process-termlist termlist)) ; primary 
+         "test0"        (display-termlist (mirror-termlist termlist))
+         "test1"        (expanded-termlist-review-page (process-termlist termlist))
+         "term->cui"    (term-cui-mapping-page (process-termlist termlist))
+         "synset table" (synset-table-page (process-termlist termlist))
+         (expanded-termlist-review-page (process-termlist termlist)) ; default
+         )
+       )))
 
   (POST "/filtertermlist/" req
     (write-filtered-termlist req)
