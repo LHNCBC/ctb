@@ -229,15 +229,22 @@ jQuery(document).ready(function(){
 (defn filtered-termlist-view
   "View generated after processing termlist filtered by user."
   [request]
-  (let [dataset (-> request :session :dataset)]
+  (let [{user :user
+         dataset :dataset} (:session request) ; Get :dataset and :user values
+                                              ; from :session part of request.
+        workdir (format "/output/%s/%s" user dataset)]
     (view-layout "Filtered TermList"
                  [:h1 "Filtered Termlist has been processed"] 
                  [:h2 "MRCONSO.RRF"]
-                 [:p "The file " [:a {:href (format "/output/%s/mrconso.rrf" dataset)} [:code "mrconso.rrf"]] 
+                 [:p "The file "
+                  [:a {:href (str workdir "/mrconso.rrf")}
+                   [:code "mrconso.rrf"]] 
                   " has been created.  Click the "
-                  [:a {:href (format "/output/%s/mrconso.rrf" dataset)} "link"] " to download it. "]
-                 [:p "Semantic type file:    " [:a {:href (format "/output/%s/mrsty.rrf" dataset)} [:code "mrsty.rrf"]]]
-                 ;; [:p "Source attribute file: " [:a {:href (format "/output/%smrsat.rrf" dataset)} "mrsat.rrf"] ]
+                  [:a {:href (str workdir "/mrconso.rrf")} "link"]
+                  " to download it. "]
+                 [:p "Semantic type file:    "
+                  [:a {:href (str workdir "/mrsty.rrf")}
+                   [:code "mrsty.rrf"]]]
                  [:h2 "Filtered TermList"]
                  (vec (concat [:ul ]
                               (mapv (fn [[k v]]
