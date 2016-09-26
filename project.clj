@@ -8,7 +8,7 @@
                  [org.clojure/data.csv "0.1.2"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "0.1.1"]
-
+                 [digest "1.4.4"]
                  [hiccup "1.0.5"]
                  [compojure "1.5.1"]
                  [ring/ring-core "1.5.0"]
