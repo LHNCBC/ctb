@@ -14,6 +14,10 @@ h2 { width: 100%; margin-top: 1em; color: #44a;
     display: block;
     margin: 10 auto;
 }
+#formcontent {
+    text-align: center
+}
+
 .known {
     background-color: #0AF; 
     background-color: rgba(0, 167, 255, 0.5);

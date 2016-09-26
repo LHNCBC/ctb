@@ -63,27 +63,35 @@
                                   synset)))))
 
 
-
 (defn termlist-submission-form
   "Generate Termlist submission form page view"
   [title]
   (view-layout
    title
-   [:center
-    [:h1 title]
-    [:form {:method "post" :action "/processtermlist/"}
-     [:textarea {:name "termlist" :rows 30 :cols 100}]
-     ;; [:p [:input {:type "file" :value "termlistfile" :enctype "multipart/form-data"}]]
-     [:p
-      ;; [:input.action {:type "submit" :value "test0" :name "cmd"}]
-      ;; [:input.action {:type "submit" :value "test1" :name "cmd"}]
-      ;; [:input.action {:type "submit" :value "test->cui" :name "cmd"}]
-      ;; [:input.action {:type "submit" :value "synset table" :name "cmd"}]
-      [:input.action {:type "submit" :value "synset list" :name "cmd"}]]
-     [:p (vec (concat [:select]
-                      (mapv #(vector :option {:value %} %)
-                            (list-data-set-names))))]
-     ]]))
+   [:div {:id "panel"}
+    [:div {:id "formcontent"}
+     [:h1 title]
+     [:p "Enter terms, one term per line."]
+     [:form {:method "post" :action "/processtermlist/"}
+      [:textarea {:name "termlist" :rows 30 :cols 100}]
+      ;; [:p [:input {:type "file" :value "termlistfile" :enctype "multipart/form-data"}]]
+      [:p
+       ;; [:input.action {:type "submit" :value "test0" :name "cmd"}]
+       ;; [:input.action {:type "submit" :value "test1" :name "cmd"}]
+       ;; [:input.action {:type "submit" :value "test->cui" :name "cmd"}]
+       ;; [:input.action {:type "submit" :value "synset table" :name "cmd"}]
+       [:input.action {:type "submit" :value "synset list" :name "cmd"}]]
+      [:p (vec (concat [:select]
+                       (mapv #(vector :option {:value %} %)
+                             (list-data-set-names))))]
+      ]]
+    [:h2 "Example Terms"]
+    [:ul
+     [:li "lumbar disk"]
+     [:li "low back pain"]
+     [:li "pneumonia"]
+     [:li "rlq abd pain"]
+     [:li "rlq abd tenderness"]]]))
 
 (defn display-termlist
   "Generate Termlist View." 
@@ -214,7 +222,7 @@ jQuery(document).ready(function(){
                                                           (:termset conceptinfo)))))])
                                   cuimap)))])
             (into (sorted-map) synset))))
-    [:input.action {:type "submit" :value "submit" :name "submit"}]]
+    [:p [:input.action {:type "submit" :value "submit" :name "submit"}]]]
    ]
   )
 
@@ -224,7 +232,13 @@ jQuery(document).ready(function(){
   (view-layout-jquery
    "SynSet View"
    [:h1 "SynSet View"]
-   (nested-synset-lists synset)))
+   [:div
+    [:ul
+     [:li "When checking a box, all parents are checked."]
+     [:li "When shift-clicking a box, all children are checked or unchecked."]
+     [:li "When unchecking a box, all children are unchecked."]]
+    (nested-synset-lists synset)
+    ]))
 
 (defn filtered-termlist-view
   "View generated after processing termlist filtered by user."
