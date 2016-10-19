@@ -9,6 +9,7 @@
             [synsetgen.umls-indexed :refer [reinit-index]]
             [synsetgen.keylistexpansion :refer [expand-termlist]])
   (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
+           (javax.servlet ServletContext)
            (java.io File)))
 
 ;; # Backend Processing Functions
@@ -20,12 +21,20 @@
   []
   (reinit-index *default-ivf-release-dirname* "tables" "ifindices"))
 
+(defn print-request
+  [request]
+  (dorun (map (fn [[k v]]
+                (println (format "%s -> %s" k v)))
+              request)))
+
 (defn mirror-termlist
+  "Function for testing termlist web form."
   [termlist]
   (filter #(> (count (trim %)) 0)
           (split termlist #"[\r\n]")))
 
 (defn process-termlist-v1
+  "Generate term -> cui -> synonym termset map."
   [newtermlist]
   (let [termlist (filter #(> (count (trim %)) 0)
                        (split newtermlist #"[\r\n]"))
@@ -33,15 +42,18 @@
         term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
         cui-concept-map (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)]
     (synset/generate-term-cui-termset-map termlist
-                                                  term-conceptid-map
-                                                  cui-concept-map)))
+                                          term-conceptid-map
+                                          cui-concept-map)))
 
 (defn termlist-string-to-vector
+  "Convert list of terms separated by newlines into vector of terms,
+  removing any empty terms."
   [termlist-string]
   (filterv #(> (count (trim %)) 0)
            (split termlist-string #"[\r\n]")))
 
 (defn mrconso-record-for-term [cui term]
+  "Create custom mrconso record for cui and term."
   {:cui cui
    :lat "ENG"
    :ts "S"
@@ -117,7 +129,11 @@
 
 (defn write-filtered-termlist
   ([req]
-   (write-filtered-termlist "resources/public/output/filtered-termlist.edn" req))
+   (let [servlet-context (:servlet-context req)
+         tmpfolder (if servlet-context
+                     (.getAttribute servlet-context ServletContext/TEMPDIR)
+                     "resources/public/output")]
+     (write-filtered-termlist (str tmpfolder "/filtered-termlist.edn") req)))
   ([filename req]
    (spit filename (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
 
@@ -194,27 +210,38 @@
   "Generate MRCONSO and MRSTY files using termlist edited by user."
   ([request]
    (let [params (:params request)
-         {user :user
-          dataset :dataset} (:session request) ; Get :dataset and :user values
-                                               ; from :session part of request.
+         servlet-context (:servlet-context request)
+         user (-> request :cookies (get "termtool-user") :value)
+         dataset (-> request :session :dataset) ; Get :dataset and :user values
+                                                ; from :session part of request.
          filtered-synset (synset-view-params-to-filtered-synset params)
          termlist (keys filtered-synset)
          synonyms-checksum (digest/sha-1 (join "|" (list-term-synonyms params)))
-         workdir (format "resources/public/output/%s/%s" user dataset)]
-     (write-filtered-termlist (str workdir "/filtered-termlist.edn" request))
+         tmpfolder (if servlet-context
+                     (.getAttribute servlet-context ServletContext/TEMPDIR)
+                     "resources/public/output")
+         workdir (format "%s/%s/%s" tmpfolder user dataset)]
+     (print-request request)
+     
      ;; if result already exists with the same filtered termlist
      ;; checksum then don't process it again.
      (if (.exists (io/file workdir))
        (if (.exists (io/file (str workdir "/synonyms.checksum")))
-         (let [saved-synonyms-checksum (slurp (str workdir "/synonyms.checksum"))]
-           (.println System/out (str "saved-synonyms-checksum: " saved-synonyms-checksum))
-           (.println System/out (str "synonyms-checksum: " synonyms-checksum))
-           (when (not= saved-synonyms-checksum synonyms-checksum)
-             (process-filtered-synset user dataset workdir termlist synonyms-checksum
-                                      filtered-synset)
-           )))
-       (process-filtered-synset user dataset workdir termlist synonyms-checksum
-                                filtered-synset)
+         (do
+           (let [saved-synonyms-checksum (slurp (str workdir "/synonyms.checksum"))]
+             (when (not= saved-synonyms-checksum synonyms-checksum)
+               (process-filtered-synset user dataset workdir termlist synonyms-checksum
+                                        filtered-synset)
+               )))
+         (process-filtered-synset user dataset workdir termlist synonyms-checksum
+                                  filtered-synset)
+         )
+         (do
+           (.mkdirs (io/file workdir))
+           (write-filtered-termlist (str workdir "/filtered-termlist.edn") request)
+           (spit (str workdir "/params") (join "\n" (keys params)))
+           (process-filtered-synset user dataset workdir termlist synonyms-checksum
+                                    filtered-synset))
      )))
   ([user dataset workdir
     termlist synonyms-checksum filtered-synset]
@@ -231,17 +258,18 @@
                        filtered-synset-cuiset
                        (set (keys cui-concept-map)))]
                                         ; create directory for session
-       (.mkdirs (io/file workdir))
-       (synset/write-mrconso-from-cui-concept-map (str workdir "/mrconso.rrf")
-                                                  cui-concept-map
-                                                  filtered-synset)
-       (synset/generate-custom-mrsty cuiset
-                                     (str workdir "/mrsty.rrf"))
-       (spit (format (str workdir "/synonyms.checksum")) synonyms-checksum)
-       ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
-       ;;   cuiset 
-       ;;  (str workdir "/mrsat.rrf"))
-       )))
+     (spit (str workdir "/termlist") (join "\n" termlist))
+     (spit (str workdir "/filtered-synset") (pr-str filtered-synset))
+     (synset/write-mrconso-from-cui-concept-map (str workdir "/mrconso.rrf")
+                                                cui-concept-map
+                                                filtered-synset)
+     (synset/generate-custom-mrsty cuiset
+                                   (str workdir "/mrsty.rrf"))
+     (spit (format (str workdir "/synonyms.checksum")) synonyms-checksum)
+     ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
+     ;;   cuiset 
+     ;;  (str workdir "/mrsat.rrf"))
+     )))
 
 
 (defn syntactically-simple?

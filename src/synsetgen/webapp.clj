@@ -5,21 +5,56 @@
             [compojure.core :refer [defroutes GET POST ANY]]
             [compojure.route :refer [resources]]
             [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.basic-authentication :as basic]
+            [ring.middleware.nested-params :refer [wrap-nested-params]]
+            [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
+            [synsetgen.manage-datasets :refer [map-user-datasets
+                                               map-user-dataset-filename]]
             [synsetgen.views :refer [termlist-submission-form
                                      display-termlist
                                      expanded-termlist-review-page
                                      term-cui-mapping-page
                                      synset-table-page
                                      synset-list-page
-                                     filtered-termlist-view]]
+                                     filtered-termlist-view
+                                     display-error-message
+                                     display-dataset-list]]
             [synsetgen.process :refer [mirror-termlist
                                        process-termlist
                                        ;; process-termlist-and-termlistfile
                                        write-filtered-termlist
-                                       process-filtered-synset]]))
+                                       process-filtered-synset]])
+    (:import (javax.servlet ServletContext)))
+
+(defn print-var
+  [varname var]
+  (.println System/out (str varname ": " (pr-str var))))
+
+(defn authenticated? [name pass]
+  (= [name pass] [(System/getenv "AUTH_USER") (System/getenv "AUTH_PASS")]))
+
+;;  Drawbirdge handler for debugging with remote REPL (currently disabled)
+;; 
+;;      (def drawbridge-handler
+;;        (-> (cemerick.drawbridge/ring-handler)
+;;            ))
+;;
+;;      (defn wrap-drawbridge [handler]
+;;        (fn [req]
+;;          (let [handler (if (= "/repl" (:uri req))
+;;                          (basic/wrap-basic-authentication
+;;                           drawbridge-handler authenticated?)
+;;                          handler)]
+;;            (handler req))))
+
+(defn wrap-user [handler]
+  (fn [request]
+    (if-let [user-id (-> request :cookies (get "termtool-user") :value)]
+        (handler (assoc request :user user-id))
+      (handler request))))
 
 ;; # Current session and cookie information
 ;;
@@ -33,12 +68,12 @@
 ;; by the 'Synset List HTML form.
 ;;
 (defn set-session-username
-  "set session var dataset in response...
+  "Set session var dataset in response...
 
   WebBrowser state variables set by this function:
 
   cookies:
-     termtool-user username for session.
+     termtool-user username for session
   sessioninfo:
      user  - same as termtool-user"
   ([cookies session]
@@ -48,7 +83,7 @@
      :session (assoc session :my-var "foo")}))
   ([cookies session body]
    (let [username (cond
-                    (contains? cookies :termtool-user) (:termtool-user cookies)
+                    (contains? cookies "termtool-user") (-> cookies (get "termtool-user") :value)
                     (contains? session :user) (:user session)
                     :else (str "user" (rand-int 100000)))]
      {:body body
@@ -67,47 +102,103 @@
 (defroutes
   webroutes
 
-  (GET "/" {cookies :cookies session :session}
-    (set-session-username cookies session (termlist-submission-form "Input Terms")))
+  ;; (let [nrepl-handler (cemerick.drawbridge/ring-handler)]
+  ;;   (ANY "/repl" request (nrepl-handler request)))
+
+  (GET "/" {cookies :cookies session :session :as request}
+    (set-session-username cookies session (termlist-submission-form request "Input Terms")))
   
-  (POST "/processtermlist/" {cookies :cookies session :sessions params :params }
+  (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
     (let [{cmd "cmd" termlist "termlist"} params]
-      (set-session-username
-       cookies
-       (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
+      {:body
        (case cmd
-         "synset list"  (synset-list-page (process-termlist termlist)) ; primary 
-         "test0"        (display-termlist (mirror-termlist termlist))
-         "test1"        (expanded-termlist-review-page (process-termlist termlist))
-         "term->cui"    (term-cui-mapping-page (process-termlist termlist))
-         "synset table" (synset-table-page (process-termlist termlist))
-         (expanded-termlist-review-page (process-termlist termlist)) ; default
+         "synset list"  (synset-list-page request (process-termlist termlist)) ; primary 
+         "test0"        (display-termlist request (mirror-termlist termlist))
+         "test1"        (expanded-termlist-review-page request (process-termlist termlist))
+         "term->cui"    (term-cui-mapping-page request (process-termlist termlist))
+         "synset table" (synset-table-page request (process-termlist termlist))
+         (expanded-termlist-review-page request (process-termlist termlist)) ; default
          )
-       )))
+       :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
+       :cookies cookies}))
 
   (POST "/filtertermlist/" req
     (write-filtered-termlist req)
     (filtered-termlist-view req))
 
   (POST "/processfiltertermlist/" req
-    (write-filtered-termlist req)
-    (process-filtered-synset req)
-    (filtered-termlist-view req))
+    {:body (do
+             (write-filtered-termlist req)
+             (process-filtered-synset req)
+             (filtered-termlist-view req))
+     :session (:session req)
+     :cookies (:cookies req)})
 
   (GET "/sessioninfo/" req
-    (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
-                                                            req))
-         "</ul>"))
+    {:body 
+     (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
+                                                                 req))
+          "</ul>")
+     :session (:session req)
+     :cookies (:cookies req)})
+    
+
+  (GET "/datasetsinfo/" {cookies :cookies session :session :as req}
+    {:body 
+     (let [user (cond
+                  (contains? session :user) (:user session)
+                  (contains? cookies "termtool-user") (-> cookies (get "termtool-user") :value)
+                  :else "NoUserName")]
+       (if (= user "NoUserName")
+         (display-error-message req "Error: no username in session or cookie!")
+         (let [servlet-context (:servlet-context req)
+               workdir (if servlet-context
+                         (.getAttribute servlet-context ServletContext/TEMPDIR)
+                         "resources/public/output")]
+           (display-dataset-list req user (map-user-datasets workdir user)))))
+     :session (:session session)
+     :cookies (:cookies cookies)})
+
+
+  (GET "/dataset/:dataset/:filename" {{dataset :dataset
+                                       filename :filename} :params
+                             cookies :cookies
+                             session :session
+                             :as request}
+    {:body 
+     (let [user (cond
+                  (contains? session :user) (:user session)
+                  (contains? cookies "termtool-user") (-> cookies (get "termtool-user") :value)
+                  :else "NoUserName")]
+       (if (= user "NoUserName")
+         (display-error-message request "Error: no username in session or cookie!")
+         (let [servlet-context (:servlet-context request)
+               workdir (if servlet-context
+                         (.getAttribute servlet-context ServletContext/TEMPDIR)
+                         "resources/public/output")
+               filepath (map-user-dataset-filename workdir user dataset filename)]
+           (if (.exists (io/file filepath))
+             (slurp filepath)
+             (str "File: " filename "(" filepath ") does not exist.")
+             ))))
+     :session (:session session)
+     :cookies (:cookies cookies)})
   
   (resources "/")
+
   )
 
 (def app 
   (-> webroutes
+      ;; wrap-drawbridge
+      wrap-nested-params
+      wrap-keyword-params
       wrap-params
       wrap-multipart-params
       wrap-session
-      wrap-cookies))
+      wrap-cookies
+      wrap-user
+      ))
 
 
 
