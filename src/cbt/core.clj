@@ -1,7 +1,7 @@
-(ns synsetgen.core
+(ns cbt.core
   (:require [clojure.edn :as edn]
             [ring.adapter.jetty :refer [run-jetty]]
-            [synsetgen.webapp :refer [app]])
+            [cbt.webapp :refer [app]])
   (:gen-class))
 
 

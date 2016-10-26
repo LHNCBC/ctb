@@ -1,13 +1,13 @@
-(ns synsetgen.process
+(ns cbt.process
   (:require [clojure.string :refer [join split trim lower-case]]
             [clojure.java.io :as io]
             [clojure.set :refer [union intersection difference]]
             [clj-time.core :refer [time-now]]
             [digest]
-            [synsetgen.umls-indexed :as umls-indexed]
-            [synsetgen.synsetgen :as synset]
-            [synsetgen.umls-indexed :refer [reinit-index]]
-            [synsetgen.keylistexpansion :refer [expand-termlist]])
+            [cbt.umls-indexed :as umls-indexed]
+            [cbt.synsetgen :as synset]
+            [cbt.umls-indexed :refer [reinit-index]]
+            [cbt.keylistexpansion :refer [expand-termlist]])
   (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
            (javax.servlet ServletContext)
            (java.io File)))

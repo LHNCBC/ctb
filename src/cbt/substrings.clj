@@ -1,4 +1,4 @@
-(ns synsetgen.substrings
+(ns cbt.substrings
   (:require [clojure.string :refer [split join]]))
 
 ;; # Substring Functions

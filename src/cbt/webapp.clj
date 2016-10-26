@@ -1,4 +1,4 @@
-(ns synsetgen.webapp
+(ns cbt.webapp
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [digest]
@@ -11,9 +11,9 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
-            [synsetgen.manage-datasets :refer [map-user-datasets
+            [cbt.manage-datasets :refer [map-user-datasets
                                                map-user-dataset-filename]]
-            [synsetgen.views :refer [termlist-submission-form
+            [cbt.views :refer [termlist-submission-form
                                      display-termlist
                                      expanded-termlist-review-page
                                      term-cui-mapping-page
@@ -22,7 +22,7 @@
                                      filtered-termlist-view
                                      display-error-message
                                      display-dataset-list]]
-            [synsetgen.process :refer [mirror-termlist
+            [cbt.process :refer [mirror-termlist
                                        process-termlist
                                        ;; process-termlist-and-termlistfile
                                        write-filtered-termlist
@@ -112,7 +112,8 @@
     (let [{cmd "cmd" termlist "termlist"} params]
       {:body
        (case cmd
-         "synset list"  (synset-list-page request (process-termlist termlist)) ; primary 
+         "submit"       (synset-list-page request (process-termlist termlist)) ; primary 
+         "synset list"  (synset-list-page request (process-termlist termlist))
          "test0"        (display-termlist request (mirror-termlist termlist))
          "test1"        (expanded-termlist-review-page request (process-termlist termlist))
          "term->cui"    (term-cui-mapping-page request (process-termlist termlist))

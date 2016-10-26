@@ -1,4 +1,4 @@
-(ns synsetgen.umls-indexed
+(ns cbt.umls-indexed
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split]]
             [clojure.set :refer [union]]

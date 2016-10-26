@@ -1,4 +1,4 @@
-(ns synsetgen.synsetgen
+(ns cbt.synsetgen
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split]]
             [clojure.set :refer [union]]
@@ -8,7 +8,7 @@
             [umls-tables.core :refer [mrconso-line-record-to-map
                                       mrsat-line-record-to-map
                                       mrsty-line-record-to-map]]
-            [synsetgen.umls-indexed :refer [generate-term-conceptid-map
+            [cbt.umls-indexed :refer [generate-term-conceptid-map
                                             get-preferred-name
                                             get-mrsty-records]]))
 

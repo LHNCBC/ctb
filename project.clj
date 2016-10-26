@@ -1,4 +1,4 @@
-(defproject synsetgen "0.1.0-SNAPSHOT"
+(defproject cbt "0.1.0-SNAPSHOT"
   :description "term -> synsets generator"
   :url "http://ii.nlm.nih.gov/"
   :license {:name "Public Domain"
@@ -13,15 +13,14 @@
                  [compojure "1.5.1"]
                  [ring/ring-core "1.5.0"]
                  [ring/ring-jetty-adapter "1.4.0"]
+                 [ring-basic-authentication "1.0.5"]
                  [skr "0.1.0-SNAPSHOT"]
-                 [lexicalsystems/lvg "2016"]
-                 [clj-wordnet "0.1.0"]
                  [irutils "2.0-SNAPSHOT"]
                  [umls-tables "0.1.0-SNAPSHOT"]]
   :plugins [[lein-ring "0.9.7"]]
-  :ring {:handler synsetgen.webapp/app
-         :init synsetgen.process/init}
+  :ring {:handler cbt.webapp/app
+         :init cbt.process/init}
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
-  :aot [synsetgen.core]
-  :main synsetgen.core)
+  :aot [cbt.core]
+  :main cbt.core)

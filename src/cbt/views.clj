@@ -1,10 +1,10 @@
-(ns synsetgen.views
+(ns cbt.views
   (:require [clojure.string :refer [join]]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [doctype include-css include-js xhtml xhtml-tag]]
             [hiccup.util]
-            [synsetgen.umls-indexed :refer [get-preferred-name]]
-            [synsetgen.process :refer [syntactically-simple? list-data-set-names]]))
+            [cbt.umls-indexed :refer [get-preferred-name]]
+            [cbt.process :refer [syntactically-simple? list-data-set-names]]))
 
 ;; # HTML Views
 ;;
@@ -79,7 +79,7 @@
        ;; [:input.action {:type "submit" :value "test1" :name "cmd"}]
        ;; [:input.action {:type "submit" :value "test->cui" :name "cmd"}]
        ;; [:input.action {:type "submit" :value "synset table" :name "cmd"}]
-       [:input.action {:type "submit" :value "synset list" :name "cmd"}]]
+       [:input.action {:type "submit" :value "submit" :name "cmd"}]]
       [:p (vec (concat [:select]
                        (mapv #(vector :option {:value %} %)
                              (list-data-set-names))))]
