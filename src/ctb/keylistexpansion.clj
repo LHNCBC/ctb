@@ -1,9 +1,9 @@
-(ns cbt.keylistexpansion
+(ns ctb.keylistexpansion
   (:require [clojure.set :refer [union]]
             [clojure.string :refer [lower-case]]
             [skr.tokenization :as tokenization]
             [umls-tables.core :refer [mrconso-line-record-to-map]]
-            [cbt.umls-indexed :refer [*memoized-normalize-ast-string*
+            [ctb.umls-indexed :refer [*memoized-normalize-ast-string*
                                             *mrconsostr-index*
                                             *mrconsocui-index*
                                             lookup]

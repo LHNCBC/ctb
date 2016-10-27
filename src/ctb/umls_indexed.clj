@@ -1,4 +1,4 @@
-(ns cbt.umls-indexed
+(ns ctb.umls-indexed
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split]]
             [clojure.set :refer [union]]
@@ -8,7 +8,8 @@
             [umls-tables.core :refer [mrconso-line-record-to-map
                                       mrsat-line-record-to-map
                                       mrsty-line-record-to-map]])
-  (:import (irutils InvertedFileContainer)))
+  (:import (java.lang System)
+           (irutils InvertedFileContainer)))
 
 ;; # Inverted Files for UMLS tables
 ;;
@@ -34,39 +35,49 @@
   (vec (.getValue (.lookup index (.toLowerCase term)))))
 
 ;; Paths to tables used by Java-based inverted file library
-
-(defonce ^:dynamic *dataroot* "data/ivf/2016AA")
+;; use property ctb.ivf.dataroot to set data root of inverted file.
+(defonce ^:dynamic *dataroot* (System/getProperty "ctb.ivf.dataroot" "data/ivf/2016AA"))
 (defonce ^:dynamic *tablepath* (format "%s/%s" *dataroot* "tables"))
 (defonce ^:dynamic *indexpath* (format "%s/%s" *dataroot* "ifindices"))
 
 ;; Container for inverted file references
 
-(defonce ^:dynamic *container* (get-container *tablepath* *indexpath*))
+;; (defonce ^:dynamic *container* (get-container *tablepath* *indexpath*))
 
 ;; Inverted file references
 
-(defonce ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
-(defonce ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
-(defonce ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
+;; (defonce ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
+;; (defonce ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
+;; (defonce ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
 ;; Currently disabled:
 ;; (defonce ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
-(defonce ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
+;; (defonce ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
 
-
-
-(defn reinit-index
+(defn init-index
   ([]
-   (reinit-index "data/ivf/2016AA" "tables" "ifindices"))
+   (init-index (System/getProperty "ctb.ivf.dataroot" "data/ivf/2016AA")
+                 "tables" "ifindices"))
   ([dataroot tablepath indexpath]
-   (def ^:dynamic *dataroot* dataroot)
-   (def ^:dynamic *tablepath* (format "%s/%s" dataroot tablepath))
-   (def ^:dynamic *indexpath* (format "%s/%s" dataroot indexpath))
-   (def ^:dynamic *container* (get-container *tablepath* *indexpath*))
-   (def ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
-   (def ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
-   (def ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
-;;   (def ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
-   (def ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))))
+   (if (.exists (io/file dataroot))
+     (do
+       (def ^:dynamic *dataroot* dataroot)
+       (def ^:dynamic *tablepath* (format "%s/%s" dataroot tablepath))
+       (def ^:dynamic *indexpath* (format "%s/%s" dataroot indexpath))
+       (if (and (.exists (io/file *tablepath*))
+                (.exists (io/file *indexpath*)))
+         (do 
+           (def ^:dynamic *container* (get-container *tablepath* *indexpath*))
+           (def ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
+           (def ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
+           (def ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
+           ;;   (def ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
+           (def ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf")))
+         (do
+           (if (not (.exists (io/file *tablepath*)))
+             (print (format "tablepath: %s does not exist." *tablepath*))
+             (if (not (.exists (io/file *indexpath*)))
+               (print (format "indexpath: %s does not exist." *indexpath*)))))))
+     (print (format "dataroot: %s does not exist." dataroot))) ))
 
 (defonce ^:dynamic *memoized-normalize-ast-string* (memoize mwi/normalize-ast-string))
 

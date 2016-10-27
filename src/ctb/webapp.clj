@@ -1,4 +1,4 @@
-(ns cbt.webapp
+(ns ctb.webapp
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [digest]
@@ -11,9 +11,9 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
-            [cbt.manage-datasets :refer [map-user-datasets
+            [ctb.manage-datasets :refer [map-user-datasets
                                                map-user-dataset-filename]]
-            [cbt.views :refer [termlist-submission-form
+            [ctb.views :refer [termlist-submission-form
                                      display-termlist
                                      expanded-termlist-review-page
                                      term-cui-mapping-page
@@ -22,12 +22,12 @@
                                      filtered-termlist-view
                                      display-error-message
                                      display-dataset-list]]
-            [cbt.process :refer [mirror-termlist
+            [ctb.process :refer [mirror-termlist
                                        process-termlist
                                        ;; process-termlist-and-termlistfile
                                        write-filtered-termlist
-                                       process-filtered-synset]])
-    (:import (javax.servlet ServletContext)))
+                                 process-filtered-synset]])
+  (:import (javax.servlet ServletContext)))
 
 (defn print-var
   [varname var]

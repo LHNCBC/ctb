@@ -1,4 +1,4 @@
-(ns cbt.umls-raw
+(ns ctb.umls-raw
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split]]
             [skr.rrf-mrconso-utils :as rrf-mrconso]

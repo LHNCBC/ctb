@@ -1,10 +1,10 @@
-(ns cbt.views
+(ns ctb.views
   (:require [clojure.string :refer [join]]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [doctype include-css include-js xhtml xhtml-tag]]
             [hiccup.util]
-            [cbt.umls-indexed :refer [get-preferred-name]]
-            [cbt.process :refer [syntactically-simple? list-data-set-names]]))
+            [ctb.umls-indexed :refer [get-preferred-name]]
+            [ctb.process :refer [syntactically-simple? list-data-set-names]]))
 
 ;; # HTML Views
 ;;

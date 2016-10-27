@@ -1,25 +1,35 @@
-(ns cbt.process
+(ns ctb.process
   (:require [clojure.string :refer [join split trim lower-case]]
             [clojure.java.io :as io]
             [clojure.set :refer [union intersection difference]]
             [clj-time.core :refer [time-now]]
             [digest]
-            [cbt.umls-indexed :as umls-indexed]
-            [cbt.synsetgen :as synset]
-            [cbt.umls-indexed :refer [reinit-index]]
-            [cbt.keylistexpansion :refer [expand-termlist]])
+            [ctb.umls-indexed :as umls-indexed]
+            [ctb.synsetgen :as synset]
+            [ctb.umls-indexed :refer [init-index]]
+            [ctb.keylistexpansion :refer [expand-termlist]])
   (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
-           (javax.servlet ServletContext)
-           (java.io File)))
+            (java.util Properties)
+            (javax.servlet ServletContext)
+            (java.io File)))
 
 ;; # Backend Processing Functions
 
 (def ^:dynamic *umls-version* "2016AA")
 (def ^:dynamic *ivfdirname* "data/ivf")
 (def ^:dynamic *default-ivf-release-dirname* "data/ivf/2016AA")
+(def ^:dynamic *properties* (new Properties))
+
 (defn init
+  "Initialize any needed resources"
   []
-  (reinit-index *default-ivf-release-dirname* "tables" "ifindices"))
+  ;; Load CBT properties from config/ctb.properties (settable by system
+  ;; property "ctb.property.file")  (should this be in ctb.webapp/init?)
+  (.load *properties*
+         (io/reader
+          (System/getProperty "ctb.property.file" "config/ctb.properties")))
+  (init-index
+   (.getProperty *properties* "ctb.ivf.dataroot") "tables" "ifindices"))
 
 (defn print-request
   [request]
@@ -301,7 +311,7 @@ MRCONSO.RRF|mrconsostr|18|14|cui|lat|termstatus|lui|termtype|SUI|ISPREF|AUI|SAUI
   [ivfpath]
   (with-open [wtr (io/writer (format "%s/tables/ifconfig" ivfpath))]
     (spit wtr ifconfig-base))
-  (reinit-index ivfpath "tables" "ifindices"))
+  (init-index ivfpath "tables" "ifindices"))
 
 (defn contains-ifindices
   "Does directory contain ifindices?"

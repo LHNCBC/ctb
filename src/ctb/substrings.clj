@@ -1,4 +1,4 @@
-(ns cbt.substrings
+(ns ctb.substrings
   (:require [clojure.string :refer [split join]]))
 
 ;; # Substring Functions

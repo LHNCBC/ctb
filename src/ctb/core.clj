@@ -1,7 +1,7 @@
-(ns cbt.core
+(ns ctb.core
   (:require [clojure.edn :as edn]
             [ring.adapter.jetty :refer [run-jetty]]
-            [cbt.webapp :refer [app]])
+            [ctb.webapp :refer [app]])
   (:gen-class))
 
 

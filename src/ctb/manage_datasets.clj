@@ -1,4 +1,4 @@
-(ns cbt.manage-datasets
+(ns ctb.manage-datasets
   (:require [clojure.java.io :as io])
   (:import (java.io File)))
 
