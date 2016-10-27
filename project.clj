@@ -1,4 +1,4 @@
-(defproject cbt "0.1.0-SNAPSHOT"
+(defproject ctb "0.1.0-SNAPSHOT"
   :description "term -> synsets generator"
   :url "http://ii.nlm.nih.gov/"
   :license {:name "Public Domain"
@@ -18,9 +18,9 @@
                  [irutils "2.0-SNAPSHOT"]
                  [umls-tables "0.1.0-SNAPSHOT"]]
   :plugins [[lein-ring "0.9.7"]]
-  :ring {:handler cbt.webapp/app
-         :init cbt.process/init}
+  :ring {:handler ctb.webapp/app
+         :init ctb.process/init}
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
-  :aot [cbt.core]
-  :main cbt.core)
+  :aot [ctb.core]
+  :main ctb.core)
