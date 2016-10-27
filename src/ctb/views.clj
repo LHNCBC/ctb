@@ -246,18 +246,20 @@ jQuery(document).ready(function(){
   (let [params (:params request)
         user (-> request :cookies (get "termtool-user") :value) ; get :user values from cookie part of request
         dataset (-> request :session :dataset) ; Get :dataset from :session part of request.
-        workdir (format "%s/dataset/%s" (:context request) dataset)]
+        workurl (if (:context request)
+                  (format "%s/dataset/%s" (:context request) dataset)
+                  (format "/dataset/%s" dataset))]
     (view-layout request "Filtered TermList"
                  [:h1 "Filtered Termlist has been processed"] 
                  [:h2 "MRCONSO.RRF"]
                  [:p "The file "
-                  [:a {:href (str workdir "/mrconso.rrf")}
+                  [:a {:href (str workurl "/mrconso.rrf")}
                    [:code "mrconso.rrf"]] 
                   " has been created.  Click the "
-                  [:a {:href (str workdir "/mrconso.rrf")} "link"]
+                  [:a {:href (str workurl "/mrconso.rrf")} "link"]
                   " to download it. "]
                  [:p "Semantic type file:    "
-                  [:a {:href (str workdir "/mrsty.rrf")}
+                  [:a {:href (str workurl "/mrsty.rrf")}
                    [:code "mrsty.rrf"]]]
                  [:h2 "Filtered TermList"]
                  (vec (concat [:ul ]
@@ -281,18 +283,19 @@ jQuery(document).ready(function(){
 (defn display-dataset-list
   "Generate HTML page including dataset list for user. "
   [request username dataset-map]
-  (let [dataset-rendering
-        (mapv (fn [[dataset filenames]]
-                (vector :li dataset
-                        (vec (concat [:ul]
-                                     (mapv #(vector :li
-                                                    [:a
-                                                     {:href
-                                                      (format "%s/dataset/%s/%s"
-                                                              (:context request)
-                                                                    dataset %)}
-                                                     %])
-                                           filenames)))))
+  (let [workurl (if (:context request)
+                  (format "%s/dataset" (:context request))
+                  "/dataset")
+        dataset-rendering (mapv
+                           (fn [[dataset filenames]]
+                             (vector :li dataset
+                                     (vec (concat [:ul]
+                                                  (mapv
+                                                   #(vector :li
+                                                            [:a {:href
+                                                                 (format "%s/%s/%s" workurl dataset %)}
+                                                             %])
+                                                   filenames)))))
               dataset-map)]
     (view-layout request (str "DataSet list for " username)
                  [:h1 (str "DataSet list for user " username)]

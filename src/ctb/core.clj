@@ -1,6 +1,7 @@
 (ns ctb.core
   (:require [clojure.edn :as edn]
             [ring.adapter.jetty :refer [run-jetty]]
+            [ctb.process :refer [init]]
             [ctb.webapp :refer [app]])
   (:gen-class))
 
@@ -18,4 +19,6 @@
         (do
           (println (format "supplied argument is not a number!  arg: %s" arg))
           (println "usage: app port-number"))))
-    (run-jetty app {:port 3000 :join false})))
+    (do
+      (init)
+      (run-jetty app {:port 3000 :join false}))))

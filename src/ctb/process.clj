@@ -231,7 +231,7 @@
                      (.getAttribute servlet-context ServletContext/TEMPDIR)
                      "resources/public/output")
          workdir (format "%s/%s/%s" tmpfolder user dataset)]
-     (print-request request)
+     ;; (print-request request)
      
      ;; if result already exists with the same filtered termlist
      ;; checksum then don't process it again.
