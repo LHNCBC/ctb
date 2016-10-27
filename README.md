@@ -49,7 +49,8 @@ or if you have Leiningen:
 
     lein ring server 
 
-Then point your web browser to localhost:3000 (or port if you've set the port number)
+Then point your web browser to localhost:3000 (or if you supplied a
+port number, that port number.)
 
 ### Supply Term List
 
@@ -76,13 +77,18 @@ The directory should contain the following files:
     synonymsp.checksum
     termlist
 
-# For developers
+## For Developers
 
-## Running the system in Apache Tomcat
+### Running the system in Apache Tomcat
 
 If you have tomcat you can use the file
 target/ctb-0.1.0-SNAPSHOT-standalone.war to deploy the system to
 tomcat.
+
+Currently, the application expects the config directory containing
+ctb.properties and the data directory containing the indexes to be in
+the top-level apache-tomcat directory (where directories conf,
+webapps, etc. resides)
 
 Note: CTB has not been extensively tested in Tomcat and may require
 modification to work properly.
