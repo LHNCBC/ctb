@@ -7,13 +7,14 @@ if [ $# = 0 ]; then
     exit 1
 fi
 DSNAME=$1
+AWK=awk
 echo "Generating inverted index for $DSNAME."
 mkdir -p data/ivf/${DSNAME}/tables data/ivf/${DSNAME}/ifindices
 
 # Generate abbreviated version of MRSTY.RRF
 if [ ! -e data/ivf/${DSNAME}/tables/zzsty ]; then
     echo "Converting MRSTY.RRF to zzsty"
-    gawk 'BEGIN { FS="|" } { printf("%s|%s\n", $1, $4) }' data/input/${DSNAME}/MRSTY.RRF > data/ivf/${DSNAME}/tables/zzsty
+    $AWK 'BEGIN { FS="|" } { printf("%s|%s\n", $1, $4) }' data/input/${DSNAME}/MRSTY.RRF > data/ivf/${DSNAME}/tables/zzsty
 fi
 
 # link to full version of MRSTY.RRF
@@ -23,7 +24,7 @@ fi
 
 # Keep only English rows of MRCONSO.RRF
 if [ ! -e data/ivf/${DSNAME}/tables/mrconso.eng ]; then
-    gawk -F \| '$2 ~ /ENG/' data/input/${DSNAME}/MRCONSO.RRF > data/ivf/${DSNAME}/tables/mrconso.eng
+    $AWK -F \| '$2 ~ /ENG/' data/input/${DSNAME}/MRCONSO.RRF > data/ivf/${DSNAME}/tables/mrconso.eng
 fi
 
 # link to full version of MRSAT.RRF
