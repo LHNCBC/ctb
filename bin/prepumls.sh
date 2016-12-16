@@ -60,3 +60,7 @@ for dbname in mrsty mrconso mrconsostr mrstyrrf ; do
 	 ${HEAPSIZE} irutils.IFBuild ${dbname}
 done
 
+echo "# Replace ctb.ivf.dataroot in your ctb.properties file with"
+echo "# the following lines:"
+echo "ctb.ivf.dataroot: data/ivf/${DSNAME}"
+
