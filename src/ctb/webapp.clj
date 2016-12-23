@@ -53,8 +53,13 @@
 (defn wrap-user [handler]
   (fn [request]
     (if-let [user-id (-> request :cookies (get "termtool-user") :value)]
-        (handler (assoc request :user user-id))
+      (handler (assoc request :user user-id))
       (handler request))))
+
+(defn wrap-content-type [handler content-type]
+  (fn [request]
+    (let [response (handler request)]
+      (assoc-in response [:headers "Content-Type"] content-type))))
 
 ;; # Current session and cookie information
 ;;
@@ -109,16 +114,16 @@
     (set-session-username cookies session (termlist-submission-form request "Input Terms")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
-    (let [{cmd "cmd" termlist "termlist"} params]
+    (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
       {:body
        (case cmd
-         "submit"       (synset-list-page request (process-termlist termlist)) ; primary 
-         "synset list"  (synset-list-page request (process-termlist termlist))
+         "submit"       (synset-list-page request (process-termlist dataset termlist)) ; primary 
+         "synset list"  (synset-list-page request (process-termlist dataset termlist))
          "test0"        (display-termlist request (mirror-termlist termlist))
-         "test1"        (expanded-termlist-review-page request (process-termlist termlist))
-         "term->cui"    (term-cui-mapping-page request (process-termlist termlist))
-         "synset table" (synset-table-page request (process-termlist termlist))
-         (expanded-termlist-review-page request (process-termlist termlist)) ; default
+         "test1"        (expanded-termlist-review-page request (process-termlist dataset termlist))
+         "term->cui"    (term-cui-mapping-page request (process-termlist dataset termlist))
+         "synset table" (synset-table-page request (process-termlist dataset termlist))
+         (expanded-termlist-review-page request (process-termlist dataset termlist)) ; default
          )
        :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
        :cookies cookies}))
@@ -192,6 +197,7 @@
 (def app 
   (-> webroutes
       ;; wrap-drawbridge
+      (wrap-content-type "text/html")
       wrap-nested-params
       wrap-keyword-params
       wrap-params
