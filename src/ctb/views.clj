@@ -21,8 +21,7 @@
            :content "text/html; charset=utf-8"}]
    [:title title]
    (include-css (str (:context request) "/css/base.css"))
-   (include-css (str (:context request) "/css/style.css"))
-   [:style "em { color: red; }"]])
+   (include-css (str (:context request) "/css/style.css"))])
 
 (defn gen-footer
   "Generate HTML footer for page, make front page link live if not at
@@ -80,9 +79,10 @@
        ;; [:input.action {:type "submit" :value "test->cui" :name "cmd"}]
        ;; [:input.action {:type "submit" :value "synset table" :name "cmd"}]
        [:input.action {:type "submit" :value "submit" :name "cmd"}]]
-      [:p (vec (concat [:select]
-                       (mapv #(vector :option {:value %} %)
-                             (list-data-set-names))))]
+      (comment 
+        [:p (vec (concat [:select]
+                         (mapv #(vector :option {:name "dataset" :value %} %)
+                               (list-data-set-names))))])
       ]]
     [:h2 "Example Terms"]
     [:ul
@@ -159,7 +159,6 @@
    [:title title]
    (include-css (str (:context request) "/css/base.css"))
    (include-css (str (:context request) "/css/style.css"))
-   [:style "em { color: red; }"]
    (include-js (str (:context request) "/js/jquery-1.4.2.min.js"))
    (include-js (str (:context request) "/js/jquery.collapsibleCheckboxTree.js"))
    (include-css (str (:context request) "/css/jquery.collapsibleCheckboxTree.css"))
@@ -209,7 +208,7 @@ jQuery(document).ready(function(){
               [:li term
                (vec (concat [:ul]
                             (mapv (fn [[cui conceptinfo]]
-                                    [:li  [:input {:type "checkbox" :checked "checked"}] (str (:preferred-name conceptinfo) " (" cui ")" )
+                                    [:li  [:input {:type "checkbox" :checked "checked"}] (str (:preferred-name conceptinfo) " <em>(" cui ")</em>" )
                                      (vec (concat [:ul]
                                                   (if (empty? (:termset conceptinfo))
                                                     [:li "<empty>"]
