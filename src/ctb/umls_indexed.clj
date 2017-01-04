@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split]]
             [clojure.set :refer [union]]
+            [clojure.tools.logging :as log]
             [skr.rrf-mrconso-utils :as rrf-mrconso]
             [skr.rrf-mrsty-utils :as rrf-mrsty]
             [skr.mwi-utilities :as mwi]
@@ -71,13 +72,14 @@
            (def ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
            (def ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
            ;;   (def ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
-           (def ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf")))
+           (def ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
+           "indexes initialized")
          (do
            (if (not (.exists (io/file *tablepath*)))
-             (print (format "tablepath: %s does not exist." *tablepath*))
+             (log/error (format "ctb.umls-indexed/init-index: tablepath: %s does not exist." *tablepath*))
              (if (not (.exists (io/file *indexpath*)))
-               (print (format "indexpath: %s does not exist." *indexpath*)))))))
-     (print (format "dataroot: %s does not exist." dataroot))) ))
+               (log/error (format "ctb.umls-indexed/init-index: indexpath: %s does not exist." *indexpath*)))))))
+     (log/error (format "dataroot: %s does not exist." dataroot))) ))
 
 (defonce ^:dynamic *memoized-normalize-ast-string* (memoize mwi/normalize-ast-string))
 
