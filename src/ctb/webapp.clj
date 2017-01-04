@@ -56,11 +56,6 @@
       (handler (assoc request :user user-id))
       (handler request))))
 
-(defn wrap-content-type [handler content-type]
-  (fn [request]
-    (let [response (handler request)]
-      (assoc-in response [:headers "Content-Type"] content-type))))
-
 ;; # Current session and cookie information
 ;;
 ;; The cookie variable 'termtool-user' contains the current username
@@ -111,34 +106,41 @@
   ;;   (ANY "/repl" request (nrepl-handler request)))
 
   (GET "/" {cookies :cookies session :session :as request}
-    (set-session-username cookies session (termlist-submission-form request "Input Terms")))
+    (->
+     (set-session-username cookies session (termlist-submission-form request "Input Terms"))
+     (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
-    (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
-      {:body
-       (case cmd
-         "submit"       (synset-list-page request (process-termlist dataset termlist)) ; primary 
-         "synset list"  (synset-list-page request (process-termlist dataset termlist))
-         "test0"        (display-termlist request (mirror-termlist termlist))
-         "test1"        (expanded-termlist-review-page request (process-termlist dataset termlist))
-         "term->cui"    (term-cui-mapping-page request (process-termlist dataset termlist))
-         "synset table" (synset-table-page request (process-termlist dataset termlist))
-         (expanded-termlist-review-page request (process-termlist dataset termlist)) ; default
-         )
-       :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
-       :cookies cookies}))
+     (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
+       {:body
+        (case cmd
+          "submit"       (synset-list-page request (process-termlist dataset termlist)) ; primary 
+          "synset list"  (synset-list-page request (process-termlist dataset termlist))
+          "test0"        (display-termlist request (mirror-termlist termlist))
+          "test1"        (expanded-termlist-review-page request (process-termlist dataset termlist))
+          "term->cui"    (term-cui-mapping-page request (process-termlist dataset termlist))
+          "synset table" (synset-table-page request (process-termlist dataset termlist))
+          (expanded-termlist-review-page request (process-termlist dataset termlist)) ; default
+          )
+        :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
+        :cookies cookies
+        :headers {"Content-Type" "text/html"}}))
 
   (POST "/filtertermlist/" req
     (write-filtered-termlist req)
-    (filtered-termlist-view req))
+    (->
+     (filtered-termlist-view req)
+     (assoc-in [:headers "Content-Type"] "text/html")))
 
   (POST "/processfiltertermlist/" req
+    (->
     {:body (do
              (write-filtered-termlist req)
              (process-filtered-synset req)
              (filtered-termlist-view req))
      :session (:session req)
-     :cookies (:cookies req)})
+     :cookies (:cookies req)}
+    (assoc-in [:headers "Content-Type"] "text/html")))
 
   (GET "/sessioninfo/" req
     {:body 
@@ -146,7 +148,8 @@
                                                                  req))
           "</ul>")
      :session (:session req)
-     :cookies (:cookies req)})
+     :cookies (:cookies req)
+     :headers {"Content-Type" "text/html"}})
     
 
   (GET "/datasetsinfo/" {cookies :cookies session :session :as req}
@@ -163,7 +166,8 @@
                          "resources/public/output")]
            (display-dataset-list req user (map-user-datasets workdir user)))))
      :session (:session session)
-     :cookies (:cookies cookies)})
+     :cookies (:cookies cookies)
+     :headers {"Content-Type" "text/html"}})
 
 
   (GET "/dataset/:dataset/:filename" {{dataset :dataset
@@ -188,7 +192,8 @@
              (str "File: " filename "(" filepath ") does not exist.")
              ))))
      :session (:session session)
-     :cookies (:cookies cookies)})
+     :cookies (:cookies cookies)
+     :headers {"Content-Type" "text/html"}})
   
   (resources "/")
 
@@ -197,7 +202,6 @@
 (def app 
   (-> webroutes
       ;; wrap-drawbridge
-      (wrap-content-type "text/html")
       wrap-nested-params
       wrap-keyword-params
       wrap-params
