@@ -2,34 +2,77 @@
   (:require [clojure.string :refer [join split trim lower-case]]
             [clojure.java.io :as io]
             [clojure.set :refer [union intersection difference]]
+            [clojure.tools.logging :as log]
             [clj-time.core :refer [time-now]]
             [digest]
             [ctb.umls-indexed :as umls-indexed]
             [ctb.synsetgen :as synset]
             [ctb.umls-indexed :refer [init-index]]
-            [ctb.keylistexpansion :refer [expand-termlist]])
+            [ctb.keylistexpansion :refer [termlist-info init-lvg]])
   (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
             (java.util Properties)
             (javax.servlet ServletContext)
-            (java.io File)))
+            (java.io File))
+  (:gen-class))
 
 ;; # Backend Processing Functions
+
+(def ^:dynamic *context-root-path* "")
+(def ^:dynamic *context-config-path* "config")
+(def ^:dynamic *context-data-path* "data")
 
 (def ^:dynamic *umls-version* "2016AA")
 (def ^:dynamic *ivfdirname* "data/ivf")
 (def ^:dynamic *default-ivf-release-dirname* "data/ivf/2016AA")
 (def ^:dynamic *properties* (new Properties))
 
+(defn set-context-root-path
+  [root-path]
+  (def ^:dynamic *context-root-path* root-path))
+
+(defn set-context-config-path
+  [config-path]
+  (def ^:dynamic *context-config-path* config-path))
+
+(defn set-context-data-path
+  [data-path]
+  (def ^:dynamic *context-data-path* data-path))
+
+(defn resolve-path
+  "If path is with-in server context then use it; otherwise, don't
+  modify path."
+  [path]
+  (cond
+    (.exists (io/file (str *context-root-path* path)))       (str *context-root-path* path)
+    (.exists (io/file (str *context-data-path* "/" path)))   (str *context-data-path* "/" path)
+    (.exists (io/file (str *context-config-path* "/" path))) (str *context-config-path* "/" path)
+    :else path))
+
 (defn init
   "Initialize any needed resources"
   []
   ;; Load CBT properties from config/ctb.properties (settable by system
   ;; property "ctb.property.file")  (should this be in ctb.webapp/init?)
-  (.load *properties*
-         (io/reader
-          (System/getProperty "ctb.property.file" "config/ctb.properties")))
-  (init-index
-   (.getProperty *properties* "ctb.ivf.dataroot") "tables" "ifindices"))
+  (let [config-file-path (resolve-path
+                          (System/getProperty "ctb.property.file"
+                                              "ctb.properties"))]
+    (log/info (format "config-file-path: %s" config-file-path))
+    (if (.exists (io/file config-file-path))
+      (.load *properties* (io/reader config-file-path))
+      (log/error (format "ctb.process/init: config file %s does not exist." config-file-path)))
+    (let [ivf-dataroot (resolve-path (.getProperty *properties* "ctb.ivf.dataroot"))
+          lvg-directory (resolve-path (.getProperty *properties* "ctb.lvg.directory"))]
+      (log/info (format "ivf-dataroot: %s" ivf-dataroot))
+      (log/info (format "lvg-directory: %s" lvg-directory))
+      ;; inverted file initialization
+      (if (.exists (io/file ivf-dataroot))
+        (init-index ivf-dataroot "tables" "ifindices")
+        (log/error (format "ctb.process/init: data root file %s does not exist." ivf-dataroot)))
+      ;; lvg initialization
+      (if (.exists (io/file lvg-directory))
+        (init-lvg lvg-directory)
+        (log/error (format "ctb.process/init: lvg directory %s does not exist." lvg-directory)))
+      )))
 
 (defn print-request
   [request]
@@ -102,17 +145,17 @@
   "Using termlist supplied by input terms form, generate term-> cui ->
   conceptinfo map suitable for converting into expanded termlist
   collapsible tree."
-  [newtermlist]
+  [dataset newtermlist]
   (let [termlist (if (string? newtermlist)
                    (termlist-string-to-vector newtermlist)
                    newtermlist)
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
         term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
         unmapped-terms (mapv #(first %) (filterv #(empty? (second %)) term-conceptid-map))
-        unmapped-term-expanded-conceptid-map (expand-termlist unmapped-terms)
+        unmapped-term-expanded-conceptid-map (termlist-info unmapped-terms)
         unmapped-term-expanded-cuiset (reduce (fn [newset item]
                                                 (union newset (second item)))
-                                                #{} unmapped-term-expanded-conceptid-map)
+                                              #{} unmapped-term-expanded-conceptid-map)
         cui-concept-map (umls-indexed/generate-cui-concept-map-from-cuiset (union term-conceptid-set
                                                                                   unmapped-term-expanded-cuiset))
         unmapped-term-cui-concept-map (generated-unmapped-term-cui-concept-map
@@ -120,9 +163,9 @@
         merged-cui-concept-map (merge-cui-concept-maps cui-concept-map unmapped-term-cui-concept-map)
         ]
     (synset/generate-term-cui-conceptinfo-map termlist 
-                                                      (merge term-conceptid-map
-                                                             unmapped-term-expanded-conceptid-map)
-                                                      merged-cui-concept-map)))
+                                              (merge term-conceptid-map
+                                                     unmapped-term-expanded-conceptid-map)
+                                              merged-cui-concept-map)))
 
 (defn process-termlist-and-termlistfile
   "Combine termlists from input box and file if either exists"
@@ -135,7 +178,6 @@
                              (termlist-string-to-vector termlistfile)
                              ""))]
     (process-termlist combined-termlist)))
-
 
 (defn write-filtered-termlist
   ([req]
