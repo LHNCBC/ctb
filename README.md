@@ -39,6 +39,18 @@ For example:
 
     bin/prepumls.sh 2016AA
 
+### Update the system configuration file
+
+There should be a file called ctb.properties in the "config"
+directory.  In ctb.properties change:
+
+    ctb.ivf.dataroot: ...
+
+to:
+
+    ctb.ivf.dataroot: data/ivf/<your data set name>
+
+
 ### Start up system
 
 In the top-level ctb directory run:
