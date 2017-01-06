@@ -201,10 +201,11 @@
                                             (:term-expansion-lists term-smap))))]
               (assoc newmap
                      (:term term-smap)
-                     {:cuilist cuilist
-                      :term-expansion-lists (if (empty? cuilist)
-                                              (:unfiltered-term-expansion-lists term-smap)
-                                              (:term-expansion-lists term-smap))})))
+                     (assoc 
+                      (if (empty? cuilist)
+                        {:unfiltered-term-expansion-lists (:unfiltered-term-expansion-lists term-smap)}
+                        {:term-expansion-lists (:term-expansion-lists term-smap)})
+                      :cuilist cuilist))))
           {} termlist))
 
 
@@ -229,8 +230,9 @@
                                             (:term-expansion-lists term-smap))))]
               (assoc newmap
                      (:term term-smap)
-                     {:cuilist cuilist
-                      :term-expansion-lists (if (empty? cuilist)
-                                              (:unfiltered-term-expansion-lists term-smap)
-                                              (:term-expansion-lists term-smap))})))
+                     (assoc 
+                      (if (empty? cuilist)
+                        {:unfiltered-term-expansion-lists (:unfiltered-term-expansion-lists term-smap)}
+                        {:term-expansion-lists (:term-expansion-lists term-smap)})
+                      :cuilist cuilist))))
           {} termlist))

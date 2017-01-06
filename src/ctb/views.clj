@@ -4,7 +4,7 @@
             [hiccup.page :refer [doctype include-css include-js xhtml xhtml-tag]]
             [hiccup.util]
             [ctb.umls-indexed :refer [get-preferred-name]]
-            [ctb.process :refer [syntactically-simple? list-data-set-names]]))
+            [ctb.process :refer [list-data-set-names]]))
 
 ;; # HTML Views
 ;;
@@ -208,15 +208,18 @@ jQuery(document).ready(function(){
               [:li term
                (vec (concat [:ul]
                             (mapv (fn [[cui conceptinfo]]
-                                    [:li  [:input {:type "checkbox" :checked "checked"}] (str (:preferred-name conceptinfo) " <em>(" cui ")</em>" )
+                                    [:li  [:input {:type "checkbox" :checked "checked"}] (str (:preferred-name conceptinfo))
+                                     " " [:em "(" cui ")"] 
                                      (vec (concat [:ul]
                                                   (if (empty? (:termset conceptinfo))
                                                     [:li "<empty>"]
-                                                    (mapv (fn [candidate-term]
+                                                    (mapv (fn [^String candidate-term]
                                                             [:li [:input (merge {:type "checkbox"
                                                                                  :name (str term "|" cui "|" candidate-term)}
-                                                                                (when (syntactically-simple? candidate-term)
-                                                                                  {:checked "checked"}))]
+                                                                                {}
+                                                                                 (if (contains? (:suppress-set conceptinfo) candidate-term)
+                                                                                   {}
+                                                                                   {:checked "checked"}) )]
                                                              candidate-term])
                                                           (:termset conceptinfo)))))])
                                   cuimap)))])

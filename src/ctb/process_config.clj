@@ -4,7 +4,8 @@
                                  set-context-data-path
                                  set-context-config-path
                                  init]]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log])
+  (:import (javax.servlet ServletContext)))
 
 (defn on-startup
   [context]

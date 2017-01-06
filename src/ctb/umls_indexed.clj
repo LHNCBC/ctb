@@ -1,6 +1,6 @@
 (ns ctb.umls-indexed
   (:require [clojure.java.io :as io]
-            [clojure.string :refer [join split]]
+            [clojure.string :refer [join split lower-case]]
             [clojure.set :refer [union]]
             [clojure.tools.logging :as log]
             [skr.rrf-mrconso-utils :as rrf-mrconso]
@@ -10,7 +10,7 @@
                                       mrsat-line-record-to-map
                                       mrsty-line-record-to-map]])
   (:import (java.lang System)
-           (irutils InvertedFileContainer)))
+           (irutils InvertedFileContainer InvertedFile)))
 
 ;; # Inverted Files for UMLS tables
 ;;
@@ -26,14 +26,14 @@
 (defn get-container [tablepath indexpath]
   (new InvertedFileContainer tablepath indexpath))
 
-(defn get-index [container dbname]
+(defn get-index [^InvertedFileContainer container dbname]
   (let [index (.get container dbname)]
     (.update index)
     (.setup index)
     index))
 
-(defn lookup [index term]
-  (vec (.getValue (.lookup index (.toLowerCase term)))))
+(defn lookup [^InvertedFile index term]
+  (vec (.getValue (.lookup index (lower-case term)))))
 
 ;; Paths to tables used by Java-based inverted file library
 ;; use property ctb.ivf.dataroot to set data root of inverted file.

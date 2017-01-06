@@ -21,4 +21,4 @@
           (println "usage: app port-number"))))
     (do
       (init)
-      (run-jetty app {:port 3000 :join false}))))
+      (run-jetty app {:port 3000 :join false})))) ; default to port 3000

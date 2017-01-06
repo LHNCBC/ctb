@@ -160,7 +160,7 @@
                   :else "NoUserName")]
        (if (= user "NoUserName")
          (display-error-message req "Error: no username in session or cookie!")
-         (let [servlet-context (:servlet-context req)
+         (let [^ServletContext servlet-context (:servlet-context req)
                workdir (if servlet-context
                          (.getAttribute servlet-context ServletContext/TEMPDIR)
                          "resources/public/output")]
@@ -182,7 +182,7 @@
                   :else "NoUserName")]
        (if (= user "NoUserName")
          (display-error-message request "Error: no username in session or cookie!")
-         (let [servlet-context (:servlet-context request)
+         (let [^ServletContext servlet-context (:servlet-context request)
                workdir (if servlet-context
                          (.getAttribute servlet-context ServletContext/TEMPDIR)
                          "resources/public/output")

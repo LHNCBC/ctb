@@ -8,11 +8,12 @@
             [ctb.umls-indexed :as umls-indexed]
             [ctb.synsetgen :as synset]
             [ctb.umls-indexed :refer [init-index]]
-            [ctb.keylistexpansion :refer [termlist-info init-lvg]])
-  (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)
-            (java.util Properties)
-            (javax.servlet ServletContext)
-            (java.io File))
+            [ctb.keylistexpansion :refer [termlist-info
+                                          init-lvg
+                                          termlist-info-with-lvg]])
+  (:import (java.util Properties)
+           (javax.servlet ServletContext)
+           (java.io File))
   (:gen-class))
 
 ;; # Backend Processing Functions
@@ -24,7 +25,7 @@
 (def ^:dynamic *umls-version* "2016AA")
 (def ^:dynamic *ivfdirname* "data/ivf")
 (def ^:dynamic *default-ivf-release-dirname* "data/ivf/2016AA")
-(def ^:dynamic *properties* (new Properties))
+(def ^:dynamic  ^Properties *properties* (new Properties))
 
 (defn set-context-root-path
   [root-path]
@@ -62,8 +63,8 @@
       (log/error (format "ctb.process/init: config file %s does not exist." config-file-path)))
     (let [ivf-dataroot (resolve-path (.getProperty *properties* "ctb.ivf.dataroot"))
           lvg-directory (resolve-path (.getProperty *properties* "ctb.lvg.directory"))]
-      (log/info (format "ivf-dataroot: %s" ivf-dataroot))
-      (log/info (format "lvg-directory: %s" lvg-directory))
+      (log/info (format "ctb.ivf.dataroot: %s" ivf-dataroot))
+      (log/info (format "ctb.lvg.directory: %s" lvg-directory))
       ;; inverted file initialization
       (if (.exists (io/file ivf-dataroot))
         (init-index ivf-dataroot "tables" "ifindices")
@@ -135,10 +136,10 @@
 
 (defn generated-unmapped-term-cui-concept-map
   [unmapped-term-expanded-conceptid-map]
-  (reduce (fn [newmap [term cuiset]]
+  (reduce (fn [newmap [term terminfomap]]
             (merge newmap (into {} (mapv (fn [cui]
                                            (vector cui (vector (mrconso-record-for-term cui term))))
-                                         cuiset))))
+                                         (:cuilist terminfomap)))))
           {} unmapped-term-expanded-conceptid-map))
 
 (defn process-termlist
@@ -152,20 +153,24 @@
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
         term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
         unmapped-terms (mapv #(first %) (filterv #(empty? (second %)) term-conceptid-map))
-        unmapped-term-expanded-conceptid-map (termlist-info unmapped-terms)
+        unmapped-term-expanded-info-map (termlist-info-with-lvg unmapped-terms)
+        unmapped-term-expanded-conceptid-map (into {} (mapv #(vector (first %) (:cuilist (second %)))
+                                                            unmapped-term-expanded-info-map))
         unmapped-term-expanded-cuiset (reduce (fn [newset item]
-                                                (union newset (second item)))
-                                              #{} unmapped-term-expanded-conceptid-map)
+                                                (union newset (:cuilist (second item))))
+                                              #{} unmapped-term-expanded-info-map)
         cui-concept-map (umls-indexed/generate-cui-concept-map-from-cuiset (union term-conceptid-set
                                                                                   unmapped-term-expanded-cuiset))
         unmapped-term-cui-concept-map (generated-unmapped-term-cui-concept-map
                                        unmapped-term-expanded-conceptid-map)
         merged-cui-concept-map (merge-cui-concept-maps cui-concept-map unmapped-term-cui-concept-map)
+        
         ]
     (synset/generate-term-cui-conceptinfo-map termlist 
                                               (merge term-conceptid-map
                                                      unmapped-term-expanded-conceptid-map)
-                                              merged-cui-concept-map)))
+                                              merged-cui-concept-map
+                                              unmapped-term-expanded-info-map)))
 
 (defn process-termlist-and-termlistfile
   "Combine termlists from input box and file if either exists"
@@ -181,7 +186,7 @@
 
 (defn write-filtered-termlist
   ([req]
-   (let [servlet-context (:servlet-context req)
+   (let [^ServletContext servlet-context (:servlet-context req)
          tmpfolder (if servlet-context
                      (.getAttribute servlet-context ServletContext/TEMPDIR)
                      "resources/public/output")]
@@ -262,7 +267,7 @@
   "Generate MRCONSO and MRSTY files using termlist edited by user."
   ([request]
    (let [params (:params request)
-         servlet-context (:servlet-context request)
+         ^ServletContext servlet-context (:servlet-context request)
          user (-> request :cookies (get "termtool-user") :value)
          dataset (-> request :session :dataset) ; Get :dataset and :user values
                                                 ; from :session part of request.
@@ -291,7 +296,7 @@
          (do
            (.mkdirs (io/file workdir))
            (write-filtered-termlist (str workdir "/filtered-termlist.edn") request)
-           (spit (str workdir "/params") (join "\n" (keys params)))
+           (spit (str workdir "/params.txt") (join "\n" (keys params)))
            (process-filtered-synset user dataset workdir termlist synonyms-checksum
                                     filtered-synset))
      )))
@@ -310,8 +315,8 @@
                        filtered-synset-cuiset
                        (set (keys cui-concept-map)))]
                                         ; create directory for session
-     (spit (str workdir "/termlist") (join "\n" termlist))
-     (spit (str workdir "/filtered-synset") (pr-str filtered-synset))
+     (spit (str workdir "/termlist.txt") (join "\n" termlist))
+     (spit (str workdir "/filtered-synset.edn") (pr-str filtered-synset))
      (synset/write-mrconso-from-cui-concept-map (str workdir "/mrconso.rrf")
                                                 cui-concept-map
                                                 filtered-synset)
@@ -324,22 +329,6 @@
      )))
 
 
-(defn syntactically-simple?
-  "Is string syntactically-simple and contains no NOS or NEC or
-  multiple meaning designators.
-
-  Not the same as the function isSyntacticallySimple which determines
-  the number of Minimal Syntactic Units (noMSUs) present in a string
-  where the number of Minimal Syntactic Units is below some
-  pre-determined threshold.
-
-"  [term]
-  (and
-   (= (NLSStrings/eliminateNosString term) (lower-case term))
-   (= (NLSStrings/eliminateMultipleMeaningDesignatorString term) term)
-   ;; (not (NLSStrings/containsPrepOrConj term))
-   (not (NLSStrings/abgn_form term))
-  ))
 
 (def ifconfig-base
   "NUM_TABLES: 3
@@ -357,10 +346,10 @@ MRCONSO.RRF|mrconsostr|18|14|cui|lat|termstatus|lui|termtype|SUI|ISPREF|AUI|SAUI
 
 (defn contains-ifindices
   "Does directory contain ifindices?"
-  [dirfile]
+  [^File dirfile]
   (not
    (empty?
-    (filter (fn [subdirfile]
+    (filter (fn [^File subdirfile]
               (when (= (:name (bean subdirfile)) "ifindices")
                 (not (empty? (.listFiles subdirfile)))))
             (.listFiles dirfile)))))
@@ -368,7 +357,7 @@ MRCONSO.RRF|mrconsostr|18|14|cui|lat|termstatus|lui|termtype|SUI|ISPREF|AUI|SAUI
 (defn list-data-set-names
   "List names of currently installed datasets"
   []
-  (let [ivfdir (File. *ivfdirname*)]
+  (let [ivfdir (File. ^String *ivfdirname*)]
     (mapv #(:name (bean %))
           (filterv contains-ifindices
                    (filterv #(:directory (bean %))

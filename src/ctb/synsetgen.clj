@@ -1,6 +1,6 @@
 (ns ctb.synsetgen
   (:require [clojure.java.io :as io]
-            [clojure.string :refer [join split]]
+            [clojure.string :refer [join split lower-case]]
             [clojure.set :refer [union]]
             [skr.rrf-mrconso-utils :as rrf-mrconso]
             [skr.rrf-mrsty-utils :as rrf-mrsty]
@@ -10,7 +10,8 @@
                                       mrsty-line-record-to-map]]
             [ctb.umls-indexed :refer [generate-term-conceptid-map
                                             get-preferred-name
-                                            get-mrsty-records]]))
+                                      get-mrsty-records]])
+  (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)))
 
 ;; # Synonym Set Generation (synsetgen)
 ;; 
@@ -81,10 +82,27 @@
     (def ^:dynamic *cui-index* (inc *cui-index*))
     cui-index))
 
+(defn syntactically-simple?
+  "Is string syntactically-simple and contains no NOS or NEC or
+  multiple meaning designators.
+
+  Not the same as the function isSyntacticallySimple which determines
+  the number of Minimal Syntactic Units (noMSUs) present in a string
+  where the number of Minimal Syntactic Units is below some
+  pre-determined threshold.
+
+"  [term]
+  (and
+   (= (NLSStrings/eliminateNosString term) (lower-case term))
+   (= (NLSStrings/eliminateMultipleMeaningDesignatorString term) term)
+   ;; (not (NLSStrings/containsPrepOrConj term))
+   (not (NLSStrings/abgn_form term))
+  ))
+
 (defn generate-term-cui-conceptinfo-map
   "Generate map of term -> synsets from termlist, term-conceptid-map,
   and cui-concept-map."
-  [termlist term-conceptid-map cui-concept-map]
+  [termlist term-conceptid-map cui-concept-map unmapped-term-expanded-info-map]
   (reduce (fn [term-map term]
             (let [nmterm (*memoized-normalize-ast-string* term)
                   cuiset (term-conceptid-map nmterm)]
@@ -93,13 +111,24 @@
                        (reduce (fn [synset-map cui]
                                  (assoc synset-map
                                         cui {:preferred-name (get-preferred-name cui)
-                                             :termset (set
-                                                       (mapv #(:str %)
-                                                             (cui-concept-map cui)))}
-                                        ))
+                                             :termset (set (conj (map #(:str %)
+                                                                       (cui-concept-map cui))
+                                                                 term))
+                                             :suppress-set (set (map #(:str %)
+                                                                     (filter #(not (syntactically-simple? (:str %)))
+                                                                             (cui-concept-map cui))))}))
                                {} cuiset) )
-                (assoc term-map term {(format "D%07d" (inc-cui-index)) {:preferred-name term
-                                                                        :termset #{ term }}})) ))
+                (let [termset (if (contains? unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term))
+                                (set
+                                 (:unfiltered-term-expansion-lists
+                                  (unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term))))
+                                #{ term })]
+                  (assoc term-map term {(format "D%07d" (inc-cui-index))
+                                        {:preferred-name term
+                                         :termset termset
+                                         :suppress-set
+                                         (disj termset
+                                               (*memoized-normalize-ast-string* term))}})) )))
           {} termlist))
 
 (defn generate-synthetic-mrconso-record
