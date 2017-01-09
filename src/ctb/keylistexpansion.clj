@@ -117,12 +117,16 @@
        (map #(*memoized-normalize-ast-string* (:target %)))))
 
 (defn get-candidate-synonyms
-  "Get candidate synonyms for supplied term."
+  "Get candidate synonyms for supplied term.  If LVG is not available
+  then just return a vector containing the term."
   [term]
-  (conj (intersection
-         (set (get-lvg-fruitful-candidate-synonyms term))
-         (set (get-umls-candidate-synonyms term)))
-        term))
+  (if (nil? *lvg-api*)
+    (vector term)
+    (conj (intersection
+           (set (get-lvg-fruitful-candidate-synonyms term))
+           (set (get-umls-candidate-synonyms term)))
+          term)))
+  
 
 (defn generate-termlists
   "Generate termlists for term."
