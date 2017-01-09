@@ -119,9 +119,10 @@
 (defn get-candidate-synonyms
   "Get candidate synonyms for supplied term."
   [term]
-  (intersection
-   (set (get-lvg-fruitful-candidate-synonyms term))
-   (set (get-umls-candidate-synonyms term))))
+  (conj (intersection
+         (set (get-lvg-fruitful-candidate-synonyms term))
+         (set (get-umls-candidate-synonyms term)))
+        term))
 
 (defn generate-termlists
   "Generate termlists for term."

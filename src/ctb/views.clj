@@ -221,7 +221,11 @@ jQuery(document).ready(function(){
                                                                                    {}
                                                                                    {:checked "checked"}) )]
                                                              candidate-term])
-                                                          (:termset conceptinfo)))))])
+                                                          (sort (into [] (conj
+                                                                          (if (empty? (:termset conceptinfo))
+                                                                            (vector term)
+                                                                            (:termset conceptinfo))
+                                                                          term)))))))])
                                   cuimap)))])
             (into (sorted-map) synset))))
     [:p [:input.action {:type "submit" :value "submit" :name "submit"}]]]

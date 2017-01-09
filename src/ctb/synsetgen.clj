@@ -120,8 +120,10 @@
                                {} cuiset) )
                 (let [termset (if (contains? unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term))
                                 (set
-                                 (:unfiltered-term-expansion-lists
-                                  (unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term))))
+                                 (conj 
+                                  (:unfiltered-term-expansion-lists
+                                   (unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term)))
+                                  term))
                                 #{ term })]
                   (assoc term-map term {(format "D%07d" (inc-cui-index))
                                         {:preferred-name term
