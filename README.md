@@ -50,6 +50,18 @@ to:
 
     ctb.ivf.dataroot: data/ivf/<your data set name>
 
+### Add LVG to configuration file for term expansion
+
+If you want to use the Lexical Tools Lexical Variant Generator (LVG)
+to supply term combinations not found in the UMLS then download LVG
+from the Lexical Systems Group website
+(https://lsg3.nlm.nih.gov/LexSysGroup/Projects/lvg/current/web/index.html)
+and install it according to its directions.  After installing the
+Lexical Tools then add the following to the ctb.properties file:
+
+    ctb.lvg.directory: {LVGDIR}
+
+Where LVGDIR is the location of your LVG installation.
 
 ### Start up system
 
