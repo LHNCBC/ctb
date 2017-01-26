@@ -18,14 +18,20 @@
 
 ;; # Backend Processing Functions
 
+;;
+;; Servlet Context Variables
+;;
 (def ^:dynamic *context-root-path* "")
 (def ^:dynamic *context-config-path* "config")
 (def ^:dynamic *context-data-path* "data")
+
+;; default data set paths and properties
 
 (def ^:dynamic *umls-version* "2016AA")
 (def ^:dynamic *ivfdirname* "data/ivf")
 (def ^:dynamic *default-ivf-release-dirname* "data/ivf/2016AA")
 (def ^:dynamic  ^Properties *properties* (new Properties))
+(def ^:dynamic *lvg-initialized* false)
 
 (defn set-context-root-path
   [root-path]
@@ -62,7 +68,8 @@
       (.load *properties* (io/reader config-file-path))
       (log/error (format "ctb.process/init: config file %s does not exist." config-file-path)))
     (let [ivf-dataroot (resolve-path (.getProperty *properties* "ctb.ivf.dataroot"))
-          lvg-directory (resolve-path (.getProperty *properties* "ctb.lvg.directory"))]
+          lvg-path (.getProperty *properties* "ctb.lvg.directory")
+          lvg-directory (resolve-path lvg-path)]
       (log/info (format "ctb.ivf.dataroot: %s" ivf-dataroot))
       (log/info (format "ctb.lvg.directory: %s" lvg-directory))
       ;; inverted file initialization
@@ -70,9 +77,13 @@
         (init-index ivf-dataroot "tables" "ifindices")
         (log/error (format "ctb.process/init: data root file %s does not exist." ivf-dataroot)))
       ;; lvg initialization
-      (if (.exists (io/file lvg-directory))
-        (init-lvg lvg-directory)
-        (log/error (format "ctb.process/init: lvg directory %s does not exist." lvg-directory)))
+      (if lvg-path
+        (do
+          (init-lvg lvg-directory)
+          (def ^:dynamic *lvg-initialized* true))
+        (do 
+          (log/error (format "ctb.process/init: lvg directory %s does not exist." lvg-directory))
+          (def ^:dynamic *lvg-initialized* false)))
       )))
 
 (defn print-request
@@ -129,6 +140,7 @@
 })
 
 (defn merge-cui-concept-maps
+  "Combine contents of two cui -> concept info maps."
   [cui-concept-map0 cui-concept-map1]
   (reduce (fn [newmap [cui recordlist]]
             (assoc newmap cui (concat (newmap cui) recordlist)))
@@ -151,9 +163,11 @@
                    (termlist-string-to-vector newtermlist)
                    newtermlist)
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
-        term-conceptid-set (umls-indexed/generate-term-conceptid-set termlist)
+        term-conceptid-set (reduce #(union %1 %2) (vals term-conceptid-map))
         unmapped-terms (mapv #(first %) (filterv #(empty? (second %)) term-conceptid-map))
-        unmapped-term-expanded-info-map (termlist-info-with-lvg unmapped-terms)
+        unmapped-term-expanded-info-map (if *lvg-initialized*
+                                          (termlist-info-with-lvg unmapped-terms)
+                                          (termlist-info unmapped-terms))
         unmapped-term-expanded-conceptid-map (into {} (mapv #(vector (first %) (:cuilist (second %)))
                                                             unmapped-term-expanded-info-map))
         unmapped-term-expanded-cuiset (reduce (fn [newset item]
