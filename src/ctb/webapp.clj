@@ -1,6 +1,7 @@
 (ns ctb.webapp
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.string :refer [trim]]
             [digest]
             [compojure.core :refer [defroutes GET POST ANY]]
             [compojure.route :refer [resources]]
@@ -14,14 +15,15 @@
             [ctb.manage-datasets :refer [map-user-datasets
                                                map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
-                                     display-termlist
-                                     expanded-termlist-review-page
-                                     term-cui-mapping-page
-                                     synset-table-page
-                                     synset-list-page
-                                     filtered-termlist-view
-                                     display-error-message
-                                     display-dataset-list]]
+                               display-termlist
+                               expanded-termlist-review-page
+                               term-cui-mapping-page
+                               synset-table-page
+                               synset-list-page
+                               filtered-termlist-view
+                               display-error-message
+                               display-dataset-list
+                               user-error-message]]
             [ctb.process :refer [mirror-termlist
                                        process-termlist
                                        ;; process-termlist-and-termlistfile
@@ -114,7 +116,9 @@
      (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
        {:body
         (case cmd
-          "submit"       (synset-list-page request (process-termlist dataset termlist)) ; primary 
+          "submit"       (if (= (count (trim termlist)) 0)
+                           (user-error-message request "User Input Error: Termlist is Empty" "User Input Error: Termlist is empty.")
+                           (synset-list-page request (process-termlist dataset termlist)))
           "synset list"  (synset-list-page request (process-termlist dataset termlist))
           "test0"        (display-termlist request (mirror-termlist termlist))
           "test1"        (expanded-termlist-review-page request (process-termlist dataset termlist))
@@ -210,6 +214,5 @@
       wrap-cookies
       wrap-user
       ))
-
 
 

@@ -308,3 +308,12 @@ jQuery(document).ready(function(){
                  (vec (concat [:ui] dataset-rendering))
                )))
 
+
+(defn user-error-message
+  "Generate user error message page view"
+  [request title message]
+  (view-layout
+   request title
+   [:div {:id "panel"}
+    [:h1 title]
+    [:p [:strong message]]]))
