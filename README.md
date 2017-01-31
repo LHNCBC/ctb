@@ -50,7 +50,7 @@ to:
 
     ctb.ivf.dataroot: data/ivf/<your data set name>
 
-### Add LVG to configuration file for term expansion
+### Adding LVG to configuration file for term expansion
 
 If you want to use the Lexical Tools Lexical Variant Generator (LVG)
 to supply term combinations not found in the UMLS then download LVG
@@ -67,11 +67,11 @@ Where LVGDIR is the location of your LVG installation.
 
 In the top-level ctb directory run:
 
-    java -jar target/ctb-0.1.0-SNAPSHOT-standalone.jar <port>
+    java -jar target/ctb-0.1.0-SNAPSHOT-standalone.jar [port]
 
 or if you have Leiningen:
 
-    lein ring server 
+    lein ring server [port]
 
 Then point your web browser to localhost:3000 (or if you supplied a
 port number, that port number.)
