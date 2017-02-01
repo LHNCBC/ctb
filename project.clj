@@ -1,4 +1,4 @@
-(defproject ctb "0.1.1-SNAPSHOT"
+(defproject ctb "0.1.2-SNAPSHOT"
   :description "term -> synsets generator"
   :url "http://ii.nlm.nih.gov/"
   :license {:name "Public Domain"
