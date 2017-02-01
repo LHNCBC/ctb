@@ -27,6 +27,21 @@
                       (assoc submap cui (union (submap cui) (cui-termset-map cui))))
                     newmap cui-termset-map))
           {} term-cui-termset-map))
+
+(defn blank-source-information
+  "Blank src, saui, scui, sdui, and sab fields in UMLS derived MRCONSO
+  records."
+  [record]
+  (if (= (:sab record) "custom")
+    record
+    (assoc 
+     (dissoc record [:src :saui :scui :sdui :sab :code])
+     :src ""
+     :saui ""
+     :scui ""
+     :sdui ""
+     :sab ""
+     :code "") ))
   
 (defn write-mrconso-from-cui-concept-map
   "Write MRCONSO records in cui-concept-map to file"
@@ -36,7 +51,7 @@
       (map (fn [cui]
              (dorun
               (map (fn [record]
-                     (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record record))))
+                     (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (blank-source-information record)))))
                    (cui-concept-map cui))))
            (sort (keys cui-concept-map))))))
   ([filename cui-concept-map filtered-synset]
@@ -47,7 +62,7 @@
                (dorun
                 (map (fn [record]
                        (when (contains? (set (cui-termset cui)) (:str record))
-                         (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record record)))))
+                         (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (blank-source-information record))))))
                      (cui-concept-map cui))))
              (sort (keys cui-concept-map))))))))
   
