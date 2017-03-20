@@ -1,6 +1,6 @@
 (ns ctb.keylistexpansion
   (:require [clojure.set :refer [intersection union]]
-            [clojure.string :refer [lower-case]]
+            [clojure.string :refer [lower-case trim]]
             [skr.tokenization :as tokenization]
             [umls-tables.core :refer [mrconso-line-record-to-map]]
             [ctb.umls-indexed :refer [*memoized-normalize-ast-string*
@@ -126,7 +126,6 @@
            (set (get-lvg-fruitful-candidate-synonyms term))
            (set (get-umls-candidate-synonyms term)))
           term)))
-  
 
 (defn generate-termlists
   "Generate termlists for term."
@@ -147,7 +146,7 @@
                                             (lookup *mrconsostr-index* normterm))]
                      (if (empty? concept-list)
                        newmap
-                   (assoc newmap normterm concept-list))))
+                       (assoc newmap normterm concept-list))))
                  {} (:term-expansion-lists term-smap))))
 
 (defn mark-term-expansions-with-cuis
@@ -173,8 +172,8 @@
     2 (gen-two-term-expansion (first termlists)
                               (second termlists))
     3 (gen-three-term-expansion (first termlists) 
-                              (second termlists)
-                              (nth termlists 2))
+                                (second termlists)
+                                (nth termlists 2))
     4 (gen-four-term-expansion (first termlists) 
                                (second termlists)
                                (nth termlists 2)
@@ -190,10 +189,10 @@
   "Return list of expanded versions of supplied term."
   [term]
   (let [termlists (generate-termlists term)]
-        (mark-term-expansions-with-cuis
-         {:term term
-          :term-expansion-lists (generate-term-expansion-lists termlists) }
-         )))
+    (mark-term-expansions-with-cuis
+     {:term term
+      :term-expansion-lists (generate-term-expansion-lists termlists) }
+     )))
 
 (defn termlist-info
   "Given a termlist, determine expansions that occur in knowledge
@@ -218,18 +217,18 @@
   [term]
   (let [termlists (generate-termlists term)
         term-expansion-lists (generate-term-expansion-lists termlists)]
-        (mark-term-expansions-with-cuis
-         {:term term
-          :term-expansion-lists term-expansion-lists
-          :unfiltered-term-expansion-lists term-expansion-lists}
-         )))
+    (mark-term-expansions-with-cuis
+     {:term term
+      :term-expansion-lists term-expansion-lists
+      :unfiltered-term-expansion-lists term-expansion-lists}
+     )))
 
 (defn termlist-info-with-lvg
   "Given a termlist, determine expansions that occur in knowledge
   source (UMLS) "
   [termlist]
   (reduce (fn [newmap term]
-            (let [term-smap (expand-term-with-lvg term)
+            (let [term-smap (expand-term-with-lvg (trim term))
                   cuilist (set (apply concat
                                       (mapv #(second %)
                                             (:term-expansion-lists term-smap))))]
