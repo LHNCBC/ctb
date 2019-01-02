@@ -5,6 +5,10 @@
             [ctb.webapp :refer [app]])
   (:gen-class))
 
+;; CTB: Custom Taxonomy Builder
+;;
+;; CTB allows one to augment a list of terms with synonyms from a knowledge source, usually the UMLS, to
+;; generate a data set for use with MetaMap or MetaMapLite.
 
 (defn -main
   "Print hello and launch Jetty with web app."
