@@ -105,7 +105,7 @@
   (->> term
        *memoized-normalize-ast-string*
        get-fruitful-variants-lex
-       (map #(*memoized-normalize-ast-string* (:target %)))))
+       (map #(*memoized-normalize-ast-string* (:target-term %)))))
 
 (defn get-lvg-expansions-candidate-synonyms
   "Get candidate synonyms from LVG acronym expansions for supplied
@@ -114,14 +114,14 @@
   (->> term
        *memoized-normalize-ast-string*
        get-acronym-expansions
-       (map #(*memoized-normalize-ast-string* (:target %)))))
+       (map #(*memoized-normalize-ast-string* (:target-term %)))))
 
 (defn get-candidate-synonyms
   "Get candidate synonyms for supplied term.  If LVG is not available
-  then just return a vector containing the term."
+  then just return UMLS candidates for term."
   [term]
   (if (nil? *lvg-api*)
-    (vector term)
+    (get-umls-candidate-synonyms term)
     (conj (intersection
            (set (get-lvg-fruitful-candidate-synonyms term))
            (set (get-umls-candidate-synonyms term)))
@@ -200,9 +200,8 @@
   [termlist]
   (reduce (fn [newmap term]
             (let [term-smap (expand-term term)
-                  cuilist (set (apply concat
-                                      (mapv #(second %)
-                                            (:term-expansion-lists term-smap))))]
+                  cuilist (set (mapcat #(second %)
+                                       (:term-expansion-lists term-smap)))]
               (assoc newmap
                      (:term term-smap)
                      (assoc 
@@ -212,11 +211,14 @@
                       :cuilist cuilist))))
           {} termlist))
 
-
 (defn expand-term-with-lvg
+  "Return list of expanded versions of supplied term using lvg version
+   of get-candidate-synonyms with generate-termlist ."
   [term]
   (let [termlists (generate-termlists term)
-        term-expansion-lists (generate-term-expansion-lists termlists)]
+        term-expansion-lists (generate-term-expansion-lists termlists)
+        ;;(get-candidate-synonyms)
+        ]
     (mark-term-expansions-with-cuis
      {:term term
       :term-expansion-lists term-expansion-lists
@@ -229,9 +231,8 @@
   [termlist]
   (reduce (fn [newmap term]
             (let [term-smap (expand-term-with-lvg (trim term))
-                  cuilist (set (apply concat
-                                      (mapv #(second %)
-                                            (:term-expansion-lists term-smap))))]
+                  cuilist (set (mapcat #(second %)
+                                       (:term-expansion-lists term-smap)))]
               (assoc newmap
                      (:term term-smap)
                      (assoc 
