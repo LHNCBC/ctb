@@ -13,7 +13,7 @@
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
             [ctb.manage-datasets :refer [map-user-datasets
-                                               map-user-dataset-filename]]
+                                         map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
                                display-termlist
                                expanded-termlist-review-page
@@ -28,7 +28,8 @@
                                        process-termlist
                                        ;; process-termlist-and-termlistfile
                                        write-filtered-termlist
-                                 process-filtered-synset]])
+                                 process-filtered-synset]]
+            [org.lpetit.ring.servlet.util :as util])
   (:import (javax.servlet ServletContext)))
 
 (defn print-var
@@ -109,7 +110,7 @@
 
   (GET "/" {cookies :cookies session :session :as request}
     (->
-     (set-session-username cookies session (termlist-submission-form request "Input Terms"))
+     (set-session-username cookies session (termlist-submission-form request "Custom Taxonomy Builder"))
      (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
@@ -166,7 +167,8 @@
          (display-error-message req "Error: no username in session or cookie!")
          (let [^ServletContext servlet-context (:servlet-context req)
                workdir (if servlet-context
-                         (.getAttribute servlet-context ServletContext/TEMPDIR)
+                         ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
+                         (:TEMPDIR (util/context-params servlet-context))
                          "resources/public/output")]
            (display-dataset-list req user (map-user-datasets workdir user)))))
      :session (:session session)
@@ -188,7 +190,8 @@
          (display-error-message request "Error: no username in session or cookie!")
          (let [^ServletContext servlet-context (:servlet-context request)
                workdir (if servlet-context
-                         (.getAttribute servlet-context ServletContext/TEMPDIR)
+                         ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
+                         (:TEMPDIR (util/context-params servlet-context))
                          "resources/public/output")
                filepath (map-user-dataset-filename workdir user dataset filename)]
            (if (.exists (io/file filepath))

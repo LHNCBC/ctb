@@ -10,7 +10,8 @@
             [ctb.umls-indexed :refer [init-index]]
             [ctb.keylistexpansion :refer [termlist-info
                                           init-lvg
-                                          termlist-info-with-lvg]])
+                                          termlist-info-with-lvg]]
+            [org.lpetit.ring.servlet.util :as util])
   (:import (java.util Properties)
            (javax.servlet ServletContext)
            (java.io File))
@@ -198,12 +199,17 @@
                              ""))]
     (process-termlist combined-termlist)))
 
+(defn get-servlet-context-tempdir
+  [servlet-context]
+  (if servlet-context
+    ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
+    (:TEMPDIR (util/context-params servlet-context))
+    "resources/public/output"))
+
 (defn write-filtered-termlist
   ([req]
    (let [^ServletContext servlet-context (:servlet-context req)
-         tmpfolder (if servlet-context
-                     (.getAttribute servlet-context ServletContext/TEMPDIR)
-                     "resources/public/output")]
+         tmpfolder (get-servlet-context-tempdir servlet-context)]
      (write-filtered-termlist (str tmpfolder "/filtered-termlist.edn") req)))
   ([filename req]
    (spit filename (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
@@ -288,9 +294,7 @@
          filtered-synset (synset-view-params-to-filtered-synset params)
          termlist (keys filtered-synset)
          synonyms-checksum (digest/sha-1 (join "|" (list-term-synonyms params)))
-         tmpfolder (if servlet-context
-                     (.getAttribute servlet-context ServletContext/TEMPDIR)
-                     "resources/public/output")
+         tmpfolder (get-servlet-context-tempdir servlet-context)
          workdir (format "%s/%s/%s" tmpfolder user dataset)]
      ;; (print-request request)
      
