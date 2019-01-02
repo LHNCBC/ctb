@@ -260,10 +260,11 @@ jQuery(document).ready(function(){
                  [:h2 "MRCONSO.RRF"]
                  [:p "The file "
                   [:a {:href (str workurl "/mrconso.rrf")}
-                   [:code "mrconso.rrf"]] 
+                   [:code "mrconso.rrf"]]
                   " has been created.  Click the "
                   [:a {:href (str workurl "/mrconso.rrf")} "link"]
                   " to download it. "]
+                 [:h2 "MRSTY.RRF"]
                  [:p "Semantic type file:    "
                   [:a {:href (str workurl "/mrsty.rrf")}
                    [:code "mrsty.rrf"]]]
