@@ -12,7 +12,8 @@
                                           init-lvg
                                           termlist-info-with-lvg]]
             [org.lpetit.ring.servlet.util :as util])
-  (:import (java.util Properties)
+  (:import (java.lang.Boolean)
+           (java.util Properties)
            (javax.servlet ServletContext)
            (java.io File))
   (:gen-class))
@@ -22,38 +23,37 @@
 ;;
 ;; Servlet Context Variables
 ;;
-(def ^:dynamic *context-root-path* "")
-(def ^:dynamic *context-config-path* "config")
-(def ^:dynamic *context-data-path* "data")
+(def context (atom {:root-path ""
+                    :config-path "config"
+                    :data-path "data" }))
 
 ;; default data set paths and properties
-
-(def ^:dynamic *umls-version* "2016AA")
-(def ^:dynamic *ivfdirname* "data/ivf")
-(def ^:dynamic *default-ivf-release-dirname* "data/ivf/2016AA")
-(def ^:dynamic  ^Properties *properties* (new Properties))
-(def ^:dynamic *lvg-initialized* false)
+(def config (atom {:umls-version  "2016AA"
+                   :ivfdirname  "data/ivf"
+                   :default-ivf-release-dirname  "data/ivf/2016AA"
+                   :properties  (new Properties)
+                   :lvg-initialized  false}))
 
 (defn set-context-root-path
   [root-path]
-  (def ^:dynamic *context-root-path* root-path))
+  (swap! context assoc :root-path root-path))
 
 (defn set-context-config-path
   [config-path]
-  (def ^:dynamic *context-config-path* config-path))
+  (swap! context assoc :config-path config-path))
 
 (defn set-context-data-path
   [data-path]
-  (def ^:dynamic *context-data-path* data-path))
+  (swap! context assoc :data-path data-path))
 
 (defn resolve-path
   "If path is with-in server context then use it; otherwise, don't
   modify path."
   [path]
   (cond
-    (.exists (io/file (str *context-root-path* path)))       (str *context-root-path* path)
-    (.exists (io/file (str *context-data-path* "/" path)))   (str *context-data-path* "/" path)
-    (.exists (io/file (str *context-config-path* "/" path))) (str *context-config-path* "/" path)
+    (.exists (io/file (str (:root-path @context) path)))       (str (:root-path @context) path)
+    (.exists (io/file (str (:data-path  @context) "/" path)))  (str (:data-path @context) "/" path)
+    (.exists (io/file (str (:config-path @context) "/" path))) (str (:config-path @context) "/" path)
     :else path))
 
 (defn init
@@ -64,15 +64,16 @@
   (let [config-file-path (resolve-path
                           (System/getProperty "ctb.property.file"
                                               "ctb.properties"))]
-    (log/info (format "config-file-path: %s" config-file-path))
+    (log/debug (format "config-file-path: %s" config-file-path))
     (if (.exists (io/file config-file-path))
-      (.load *properties* (io/reader config-file-path))
+      (.load ^Properties (:properties @config) (io/reader config-file-path))
       (log/error (format "ctb.process/init: config file %s does not exist." config-file-path)))
-    (let [ivf-dataroot (resolve-path (.getProperty *properties* "ctb.ivf.dataroot"))
-          lvg-path (.getProperty *properties* "ctb.lvg.directory")
-          lvg-directory (resolve-path lvg-path)]
-      (log/info (format "ctb.ivf.dataroot: %s" ivf-dataroot))
-      (log/info (format "ctb.lvg.directory: %s" lvg-directory))
+    (let [ivf-dataroot (resolve-path (.getProperty ^Properties (:properties @config) "ctb.ivf.dataroot"))
+          lvg-path (.getProperty ^Properties (:properties @config) "ctb.lvg.directory")
+          lvg-directory (resolve-path lvg-path)
+          hide-vocab-sources ^boolean (Boolean/parseBoolean (.getProperty ^Properties (:properties @config) "ctb.hide.vocab.sources"))]
+      (log/debug (format "ctb.ivf.dataroot: %s" ivf-dataroot))
+      (log/debug (format "ctb.lvg.directory: %s" lvg-directory))
       ;; inverted file initialization
       (if (.exists (io/file ivf-dataroot))
         (init-index ivf-dataroot "tables" "ifindices")
@@ -81,11 +82,14 @@
       (if lvg-path
         (do
           (init-lvg lvg-directory)
-          (def ^:dynamic *lvg-initialized* true))
+          (swap! config assoc :lvg-initialized true))
         (do 
           (log/error (format "ctb.process/init: lvg directory %s does not exist." lvg-directory))
-          (def ^:dynamic *lvg-initialized* false)))
-      )))
+          (swap! config assoc :lvg-initialized false)))
+      ;; tell synsetgen if vocabulary source abbreviation should be obscured.
+      (log/debug (str "hide-vocab-sources: " hide-vocab-sources))
+      (synset/set-hide-vocab-sources! hide-vocab-sources)
+)))
 
 (defn print-request
   [request]
@@ -166,7 +170,7 @@
         term-conceptid-map (umls-indexed/generate-term-conceptid-map termlist)
         term-conceptid-set (reduce #(union %1 %2) (vals term-conceptid-map))
         unmapped-terms (mapv #(first %) (filterv #(empty? (second %)) term-conceptid-map))
-        unmapped-term-expanded-info-map (if *lvg-initialized*
+        unmapped-term-expanded-info-map (if (:lvg-initialized @config)
                                           (termlist-info-with-lvg unmapped-terms)
                                           (termlist-info unmapped-terms))
         unmapped-term-expanded-conceptid-map (into {} (mapv #(vector (first %) (:cuilist (second %)))
@@ -341,7 +345,7 @@
      (synset/generate-custom-mrsty cuiset
                                    (str workdir "/mrsty.rrf"))
      (spit (format (str workdir "/synonyms.checksum")) synonyms-checksum)
-     ;;(synset/generate-custom-mrsat (str "input/" *umls-version* "/MRSAT.RRF")
+     ;;(synset/generate-custom-mrsat (str "input/" (:umls-version @config) "/MRSAT.RRF")
      ;;   cuiset 
      ;;  (str workdir "/mrsat.rrf"))
      )))
@@ -375,7 +379,7 @@ MRCONSO.RRF|mrconsostr|18|14|cui|lat|termstatus|lui|termtype|SUI|ISPREF|AUI|SAUI
 (defn list-data-set-names
   "List names of currently installed datasets"
   []
-  (let [ivfdir (File. ^String *ivfdirname*)]
+  (let [ivfdir (File. ^String (:ivfdirname @config))]
     (mapv #(:name (bean %))
           (filterv contains-ifindices
                    (filterv #(:directory (bean %))

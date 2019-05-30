@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :refer [join split lower-case]]
             [clojure.set :refer [union]]
+            [clojure.tools.logging :as log]
             [skr.rrf-mrconso-utils :as rrf-mrconso]
             [skr.rrf-mrsty-utils :as rrf-mrsty]
             [skr.mwi-utilities :as mwi]
@@ -16,8 +17,13 @@
 ;; # Synonym Set Generation (synsetgen)
 ;; 
 
-(defonce ^:dynamic *memoized-normalize-ast-string* (memoize mwi/normalize-ast-string))
-(defonce ^:dynamic *default-sab* "custom")
+(defonce memoized-normalize-ast-string (memoize mwi/normalize-ast-string))
+(defonce default-sab (atom "custom"))
+(defonce hide-vocab-sources (atom false))
+
+(defn set-hide-vocab-sources!
+  [boolvalue]
+  (reset! hide-vocab-sources boolvalue))
 
 (defn term-cui-termset-map-to-cui-termset-map
   "Convert term -> cui -> termset map to cui -> termset map"
@@ -42,6 +48,12 @@
      :sdui ""
      :sab ""
      :code "") ))
+
+(defn transform-record
+  [record]
+  (if @hide-vocab-sources
+    (blank-source-information record)
+    record) )
   
 (defn write-mrconso-from-cui-concept-map
   "Write MRCONSO records in cui-concept-map to file"
@@ -51,7 +63,7 @@
       (map (fn [cui]
              (dorun
               (map (fn [record]
-                     (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (blank-source-information record)))))
+                     (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (transform-record record)))))
                    (cui-concept-map cui))))
            (sort (keys cui-concept-map))))))
   ([filename cui-concept-map filtered-synset]
@@ -62,7 +74,7 @@
                (dorun
                 (map (fn [record]
                        (when (contains? (set (cui-termset cui)) (:str record))
-                         (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (blank-source-information record))))))
+                         (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (transform-record record))))))
                      (cui-concept-map cui))))
              (sort (keys cui-concept-map))))))))
   
@@ -71,7 +83,7 @@
   and cui-concept-map."
   [termlist term-conceptid-map cui-concept-map]
   (reduce (fn [term-map term]
-            (let [nmterm (*memoized-normalize-ast-string* term)
+            (let [nmterm (memoized-normalize-ast-string term)
                   cuiset (term-conceptid-map nmterm)]
               (assoc term-map term
                      (reduce (fn [synset-map cui]
@@ -88,14 +100,13 @@
 ;; don't occur in knowledge source.
 ;;
 
-(def ^:dynamic *cui-index* 1)
+(def cui-index (atom 1))
 
 (defn inc-cui-index
   "increment global cui index"
   []
-  (let [cui-index *cui-index*]
-    (def ^:dynamic *cui-index* (inc *cui-index*))
-    cui-index))
+  (swap! cui-index inc)
+  @cui-index)
 
 (defn syntactically-simple?
   "Is string syntactically-simple and contains no NOS or NEC or
@@ -119,7 +130,7 @@
   and cui-concept-map."
   [termlist term-conceptid-map cui-concept-map unmapped-term-expanded-info-map]
   (reduce (fn [term-map term]
-            (let [nmterm (*memoized-normalize-ast-string* term)
+            (let [nmterm (memoized-normalize-ast-string term)
                   cuiset (term-conceptid-map nmterm)]
               (if (> (count cuiset) 0)
                 (assoc term-map term
@@ -133,11 +144,11 @@
                                                                      (filter #(not (syntactically-simple? (:str %)))
                                                                              (cui-concept-map cui))))}))
                                {} cuiset) )
-                (let [termset (if (contains? unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term))
+                (let [termset (if (contains? unmapped-term-expanded-info-map (memoized-normalize-ast-string term))
                                 (set
                                  (conj 
                                   (:unfiltered-term-expansion-lists
-                                   (unmapped-term-expanded-info-map (*memoized-normalize-ast-string* term)))
+                                   (unmapped-term-expanded-info-map (memoized-normalize-ast-string term)))
                                   term))
                                 #{ term })]
                   (assoc term-map term {(format "D%07d" (inc-cui-index))
@@ -145,7 +156,7 @@
                                          :termset termset
                                          :suppress-set
                                          (disj termset
-                                               (*memoized-normalize-ast-string* term))}})) )))
+                                               (memoized-normalize-ast-string term))}})) )))
           {} termlist))
 
 (defn generate-synthetic-mrconso-record
@@ -175,7 +186,7 @@
     "" ;; (get-lui term)
     "" ;; (get-sui term)
     "" ;; (get-aui term cui sab)
-    *default-sab*
+    @default-sab
     ""
     ""
     term))
@@ -199,8 +210,8 @@
            (if (empty? cui-termset-map)
              (generate-synthetic-mrconso-record term)
              (mapv (fn [[cui termset]]
-                     (if (contains? (set (map *memoized-normalize-ast-string* termset))
-                                    (*memoized-normalize-ast-string* term))
+                     (if (contains? (set (map memoized-normalize-ast-string termset))
+                                    (memoized-normalize-ast-string term))
                        (cui-concept-map cui)
                        (conj (cui-concept-map cui)
                              (generate-synthetic-mrconso-record term))))
@@ -217,8 +228,8 @@
                  (assoc newmap term {(:cui record) (vector record)}))
                (assoc newmap term
                       (reduce (fn [cmap [cui termset]]
-                                (if (contains? (set (map *memoized-normalize-ast-string* termset))
-                                               (*memoized-normalize-ast-string* term))
+                                (if (contains? (set (map memoized-normalize-ast-string termset))
+                                               (memoized-normalize-ast-string term))
                                   (assoc cmap cui (cui-concept-map cui))
                                   (assoc cmap cui (conj (cui-concept-map cui)
                                                         (generate-synthetic-mrconso-record term)))))

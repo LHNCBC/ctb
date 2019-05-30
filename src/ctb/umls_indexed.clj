@@ -32,8 +32,16 @@
     (.setup index)
     index))
 
-(defn lookup [^InvertedFile index term]
-  (vec (.getValue (.lookup index (lower-case term)))))
+(defn lookup
+  "Lookup term in inverted index. Term is lowercased before search
+  unless lower-case? is set to false, then term is unchanged."
+  ([^InvertedFile index term]
+   (vec (.getValue (.lookup index (lower-case term)))))
+  ([^InvertedFile index term lower-case?]
+   (if lower-case?
+     (lookup index term)
+     (vec (.getValue (.lookup index term))))))
+
 
 ;; Paths to tables used by Java-based inverted file library
 ;; use property ctb.ivf.dataroot to set data root of inverted file.
@@ -107,7 +115,7 @@
   [cuiset]
   (reduce (fn [newmap cui]
             (assoc newmap cui (concat (newmap cui) (map mrconso-line-record-to-map
-                                                        (lookup *mrconsocui-index* cui)))))
+                                                        (lookup *mrconsocui-index* cui false)))))
           {} cuiset))
 
 (defn get-mrconso-records-with-preferred-name
@@ -115,7 +123,7 @@
   [cui]
   (filter #(and (= (:ts %) "P") (= (:stt %) "PF"))
           (map mrconso-line-record-to-map
-               (lookup *mrconsocui-index* cui))))
+               (lookup *mrconsocui-index* cui false))))
 
 (defn get-preferred-name
   "Return str field of first MRCONSO record with TS field equal to \"P\" and STT field equal to \"PF\". "
