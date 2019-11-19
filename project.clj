@@ -19,17 +19,20 @@
                  [ring-basic-authentication "1.0.5"]
                  [org.lpetit.ring/ring-java-servlet "0.2.0"]
                  [javax.servlet/servlet-api "2.5"]
+                 [javax.servlet/javax.servlet-api "3.1.0" :scope "provided"]
                  [skr "0.1.2-SNAPSHOT"]
                  [irutils "2.0"]
                  [umls-tables "0.1.0-SNAPSHOT"]
                  [lvgclj "0.1.0-SNAPSHOT"]]
-  :plugins [[lein-ring "0.12.4"]]
+  :plugins [[lein-ring "0.12.5"]]
   :ring {:handler ctb.webapp/app
          :init ctb.process/init
-         :listener-class org.lpetit.ring.servlet.RingServletContextListener}
+         :listener-class org.lpetit.ring.servlet.RingServletContextListener
+         :web-xml "web.xml"}
   :repositories [["ii" "https://metamap.nlm.nih.gov/maven2/"]]
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
+  :target-path "target/%s"
   :aot [ctb.core
         ctb.process-config]
   :main ctb.core)

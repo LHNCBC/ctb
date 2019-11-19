@@ -96,7 +96,8 @@
 
 (defn init-lvg
   [lvgdir]
-  (def ^:dynamic *lvg-api* (lvg.core/init lvgdir)))
+  (when (not (nil? lvgdir))
+    (def ^:dynamic *lvg-api* (lvg.core/init lvgdir))))
 
 (defn get-lvg-fruitful-candidate-synonyms
   "Get candidate synonyms from LVG Fruitful Variants for supplied

@@ -10,9 +10,10 @@
                                       mrsat-line-record-to-map
                                       mrsty-line-record-to-map]]
             [ctb.umls-indexed :refer [generate-term-conceptid-map
-                                            get-preferred-name
+                                      get-preferred-name
                                       get-mrsty-records]])
-  (:import (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)))
+  (:import (java.io Writer)
+           (gov.nih.nlm.nls.nlp.nlsstrings NLSStrings)))
 
 ;; # Synonym Set Generation (synsetgen)
 ;; 
@@ -55,10 +56,60 @@
     (blank-source-information record)
     record) )
   
+
+(defn mrconso-from-cui-concept-map-write
+    "Write MRCONSO records in cui-concept-map to writer"
+  ([^Writer wtr cui-concept-map]
+  (dorun
+   (map (fn [cui]
+          (dorun
+           (map (fn [record]
+                  (.write wtr
+                          (format "%s\n"
+                                  (rrf-mrconso/mrconso-map-to-line-record
+                                   (blank-source-information record)))))
+                (cui-concept-map cui))))
+        (sort (keys cui-concept-map)))))
+  ([^Writer wtr cui-concept-map filtered-synset]
+   (let [cui-termset (term-cui-termset-map-to-cui-termset-map filtered-synset)]
+       (dorun
+        (map (fn [cui]
+               (dorun
+                (map (fn [record]
+                       (when (contains? (set (cui-termset cui)) (:str record))
+                         (.write wtr
+                                 (format "%s\n"
+                                         (rrf-mrconso/mrconso-map-to-line-record
+                                          (blank-source-information record))))))
+                     (cui-concept-map cui))))
+             (sort (keys cui-concept-map)))))))
+
+(defn mrconso-records-from-cui-concept-map
+    "Write MRCONSO records in cui-concept-map to writer"
+  ([cui-concept-map]
+   (mapcat (fn [cui]
+             (map (fn [record]
+                    (format "%s\n"
+                            (rrf-mrconso/mrconso-map-to-line-record
+                             (blank-source-information record))))
+                  (cui-concept-map cui)))
+           (sort (keys cui-concept-map))))
+  ([cui-concept-map filtered-synset]
+   (let [cui-termset (term-cui-termset-map-to-cui-termset-map filtered-synset)]
+     (mapcat (fn [cui]
+               (map (fn [record]
+                      (if (contains? (set (cui-termset cui)) (:str record))
+                        (format "%s\n"
+                                (rrf-mrconso/mrconso-map-to-line-record
+                                 (blank-source-information record)))
+                        ""))
+                    (cui-concept-map cui)))
+             (sort (keys cui-concept-map))))))
+
 (defn write-mrconso-from-cui-concept-map
   "Write MRCONSO records in cui-concept-map to file"
   ([filename cui-concept-map]
-   (with-open [wtr (io/writer filename)]
+   (with-open [wtr (io/writer filename :encoding "UTF-8")]
      (dorun
       (map (fn [cui]
              (dorun
@@ -68,7 +119,7 @@
            (sort (keys cui-concept-map))))))
   ([filename cui-concept-map filtered-synset]
    (let [cui-termset (term-cui-termset-map-to-cui-termset-map filtered-synset)]
-     (with-open [wtr (io/writer filename)]
+     (with-open [wtr (io/writer filename :encoding "UTF-8")]
        (dorun
         (map (fn [cui]
                (dorun
@@ -77,6 +128,8 @@
                          (.write wtr (format "%s\n"(rrf-mrconso/mrconso-map-to-line-record (transform-record record))))))
                      (cui-concept-map cui))))
              (sort (keys cui-concept-map))))))))
+
+
   
 (defn generate-term-cui-termset-map
   "Generate map of term -> cui -> termset from termlist, term-conceptid-map,
@@ -239,7 +292,7 @@
 (defn serialize-augmented-mrconso-records-map
   "Serialize augmented MRCONSO records to file."
   [filename augmented-mrconso-records-map]
-  (with-open [wtr (io/writer filename)]
+  (with-open [wtr (io/writer filename :encoding "UTF-8")]
     (dorun
      (map (fn [[term cui-records-map]]
             (dorun
@@ -272,7 +325,7 @@
   [src-mrfilefn cuilist dst-mrfilefn] 
   (let [cuiset (set cuilist)]
     (with-open [rdr (io/reader src-mrfilefn)]
-      (with-open [wtr (io/writer dst-mrfilefn)]
+      (with-open [wtr (io/writer dst-mrfilefn :encoding "UTF-8")]
         (dorun 
          (map (fn [line]
                 (let [fields (split line #"\|")]
@@ -284,7 +337,7 @@
   "Write UMLS-like MRxxx file to dst-mrfilefn using records with
   fieldlist as guide."
   [recordlist fieldlist dst-mrfilefn]
-  (with-open [wtr (io/writer dst-mrfilefn)]
+  (with-open [wtr (io/writer dst-mrfilefn :encoding "UTF-8")]
     (dorun 
      (map (fn [rrfrecord]
             (.write wtr (join "|" (mapv #(get rrfrecord %)
@@ -330,3 +383,33 @@
                                        cuilist))
                         rrf-mrsty/*rrf-mrsty-label-order*
                         dst-mrstyfn)))
+
+(defn custom-mrfile-write
+  "Write UMLS-like MRxxx file to writer using records with
+  fieldlist as guide."
+  [^Writer wtr recordlist fieldlist]
+  (dorun 
+   (map (fn [rrfrecord]
+          (.write wtr (join "|" (mapv #(get rrfrecord %)
+                                      fieldlist)))
+          (.write wtr "\n"))
+        (sort-by :cui recordlist))))
+
+(defn custom-mrsty-write
+  "Generate custom MRSTY file to writer."
+  [mrsty-writer cuilist]
+  (custom-mrfile-write
+   mrsty-writer
+   (flatten (mapv #(gen-mrsty-records %)
+                  cuilist))
+   rrf-mrsty/*rrf-mrsty-label-order*))
+
+(defn gen-custom-mrsty-recordlist
+  "Generate list custom MRSTY record strings"
+  [cuilist]
+  (map (fn [rrfrecord]
+          (join "|" (mapv #(get rrfrecord %)
+                          rrf-mrsty/*rrf-mrsty-label-order*)))
+        (sort-by :cui 
+                 (flatten (mapv #(gen-mrsty-records %)
+                                cuilist)))))

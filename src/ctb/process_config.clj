@@ -9,12 +9,21 @@
 
 (defn on-startup
   [context]
-  (let [servlet-context (util/context-params context)]
-    (log/info (format "ctb.process-config: util/context-params: %s" servlet-context))
-    (set-context-root-path (.getRealPath servlet-context "/"))
-    (set-context-data-path (.getRealPath servlet-context "data"))
-    (set-context-config-path (.getRealPath servlet-context "config"))
-    (init)))
+  (let [servlet-context-map (util/context-params context)]
+    (log/info (format "ctb.process-config: util/context-params: %s" servlet-context-map))
+  (if (nil? context)
+    ;; running using jetty 
+    (let [root-path ""
+          data-path  ""
+          config-path  "config"]
+      (init root-path data-path config-path))
+    (when (nil? (.getAttribute context "ctbappcontext"))
+      (let [servlet-context (util/context-params context)
+            root-path (.getRealPath context "")
+            data-path (.getRealPath context "")
+            config-path (.getRealPath context "config")]
+        (log/info "ctb.process/handle-servler-context: data-path: " data-path )
+        (.setAttribute context "ctbappcontext" (init root-path data-path config-path)))))))
 
 (defn on-shutdown
   [context]

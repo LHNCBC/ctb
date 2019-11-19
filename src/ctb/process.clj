@@ -11,6 +11,7 @@
             [ctb.keylistexpansion :refer [termlist-info
                                           init-lvg
                                           termlist-info-with-lvg]]
+            [ring.util.io :refer [piped-input-stream]]
             [org.lpetit.ring.servlet.util :as util])
   (:import (java.lang.Boolean)
            (java.util Properties)
@@ -23,6 +24,7 @@
 ;;
 ;; Servlet Context Variables
 ;;
+
 (def context (atom {:root-path ""
                     :config-path "config"
                     :data-path "data" }))
@@ -90,6 +92,8 @@
       (log/debug (str "hide-vocab-sources: " hide-vocab-sources))
       (synset/set-hide-vocab-sources! hide-vocab-sources)
 )))
+
+
 
 (defn print-request
   [request]
@@ -202,13 +206,23 @@
                              (termlist-string-to-vector termlistfile)
                              ""))]
     (process-termlist combined-termlist)))
-
+;; servletContext.getAttribute("javax.servlet.context.tempdir")
 (defn get-servlet-context-tempdir
-  [servlet-context]
-  (if servlet-context
-    ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
-    (:TEMPDIR (util/context-params servlet-context))
-    "resources/public/output"))
+  "Get temporary storage directory from servlet context."
+  [^ServletContext servlet-context]
+  (let [tempdir (if servlet-context
+                  (.getPath (.getAttribute servlet-context "javax.servlet.context.tempdir"))
+                  ;; (:TEMPDIR (util/context-params servlet-context))
+                  "resources/public/output")]
+    ;; (log/info "(.getAttribute servlet-context ServletContext/TEMPDIR): "
+    ;;           (.getAttribute servlet-context ServletContext/TEMPDIR))
+    (log/info "(:TEMPDIR (util/context-params servlet-context)): "
+              (:TEMPDIR (util/context-params servlet-context)))
+    (log/info "(.getAttribute servlet-context \"javax.servlet.context.tempdir\"): "
+              (.getPath (.getAttribute servlet-context "javax.servlet.context.tempdir")))
+    (if (nil? tempdir)
+      "/tmp"
+      tempdir)))
 
 (defn write-filtered-termlist
   ([req]
@@ -384,3 +398,95 @@ MRCONSO.RRF|mrconsostr|18|14|cui|lat|termstatus|lui|termtype|SUI|ISPREF|AUI|SAUI
           (filterv contains-ifindices
                    (filterv #(:directory (bean %))
                             (into [] (.listFiles ivfdir)))))))
+
+(defn termlist-to-cui-concept-map
+  "Given a termlist, generate a synset from the umls and generate a
+  cui-concept-map to be later converted to mrconso."
+  [newtermlist]
+  (let [termlist (if (string? newtermlist)
+                   (termlist-string-to-vector newtermlist)
+                   newtermlist)
+        term-synset (process-termlist "dataset" termlist)
+        synset-cuiset (list-synset-cuiset term-synset)
+        term-conceptid-set (union (umls-indexed/generate-term-conceptid-set
+                                   termlist)
+                                  synset-cuiset)]
+    (add-unmapped-terms-to-cui-concept-map
+     (umls-indexed/generate-cui-concept-map-from-cuiset term-conceptid-set)
+     term-synset)))
+
+(defn termlist-to-cuiset
+  "Given a termlist, generate a synset from the umls and generate a
+  cuiset to be later converted to mrsty."
+  [newtermlist]
+  (let [termlist (if (string? newtermlist)
+                   (termlist-string-to-vector newtermlist)
+                   newtermlist)
+        term-synset (process-termlist "dataset" termlist)]
+    (list-synset-cuiset term-synset)))
+
+(defn expand-custom-mrconso-records
+  "Expand custom records where :str field is a structure rather than a
+  string. "
+  [record-list]
+  (reduce (fn [newlist record]
+            (if (coll? (:str record))
+              (cond (= (-> record :str first) :preferred-name)
+                    (conj newlist (assoc record :str (-> record :str second)))
+                    (= (-> record :str first) :suppress-set) ; from lvg
+                    (concat newlist
+                            (map (fn [term]
+                                   (assoc record :str term :sab "custom-lvg"))
+                                 (-> record :str second)))
+                    (= (-> record :str first) :termset)
+                    (concat newlist
+                            (map (fn [term]
+                                   (assoc record :str term :sab "custom"))
+                                 (-> record :str second)))
+                    :else newlist)     ; if not recognized, don't add it.
+              (conj newlist record)))
+          '() record-list))
+
+
+(defn expand-cui-concept-map
+  "Expand custom records in cui-concept-map"
+  [cui-concept-map]
+  (into {}
+        (map (fn [[cui recordlist]]
+               (vector cui (expand-custom-mrconso-records recordlist)))
+             cui-concept-map)))
+
+(defn cui-concept-map-to-mrconso-write
+  "Write cui-concept-map as a MRCONSO stream."
+  ([wtr cui-concept-map]
+   (synset/mrconso-from-cui-concept-map-write wtr cui-concept-map))
+  ([wtr cui-concept-map term-synset]
+   (synset/mrconso-from-cui-concept-map-write wtr cui-concept-map term-synset)))
+
+(defn cuicoll-to-custom-mrsty-write
+  [wtr cuicoll]
+  (synset/custom-mrsty-write wtr (sort (into [] cuicoll))))
+
+
+(defn cui-concept-map-to-mrconso-recordlist
+  ([cui-concept-map]
+   (synset/mrconso-records-from-cui-concept-map cui-concept-map))
+  ([cui-concept-map term-synset]
+   (synset/mrconso-records-from-cui-concept-map cui-concept-map term-synset)))
+
+(defn stream-mrconso
+  "Given termlist in params stream mrconso to standardOutput "
+  [params]
+  (let [{termlist "termlist"} params
+        cui-concept-map (expand-cui-concept-map (termlist-to-cui-concept-map termlist))
+        stream-mrconso (fn [out]
+                         (dorun
+                          (map #(do (.write out %)
+                                    (.flush out))
+                               (cui-concept-map-to-mrconso-recordlist cui-concept-map))
+                          (.flush out)))]
+    (piped-input-stream #(stream-mrconso (io/make-writer % {})))))
+
+(defn cuicoll-to-custom-mrsty-recordlist
+  [cuicoll]
+  (synset/gen-custom-mrsty-recordlist (sort (into [] cuicoll))))

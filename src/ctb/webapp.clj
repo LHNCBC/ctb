@@ -12,6 +12,7 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
+            [ring.util.io :refer [piped-input-stream]]
             [ctb.manage-datasets :refer [map-user-datasets
                                          map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
@@ -25,10 +26,19 @@
                                display-dataset-list
                                user-error-message]]
             [ctb.process :refer [mirror-termlist
-                                       process-termlist
-                                       ;; process-termlist-and-termlistfile
-                                       write-filtered-termlist
-                                 process-filtered-synset]]
+                                 process-termlist
+                                 ;; process-termlist-and-termlistfile
+                                 write-filtered-termlist
+                                 process-filtered-synset
+                                 termlist-to-cui-concept-map
+                                 cui-concept-map-to-mrconso-write
+                                 cui-concept-map-to-mrconso-recordlist
+                                 expand-cui-concept-map
+                                 termlist-to-cuiset
+                                 cuicoll-to-custom-mrsty-write
+                                 handle-servlet-context
+                                 get-servlet-context-tempdir
+                                 stream-mrconso]]
             [org.lpetit.ring.servlet.util :as util])
   (:import (javax.servlet ServletContext)))
 
@@ -58,6 +68,15 @@
     (if-let [user-id (-> request :cookies (get "termtool-user") :value)]
       (handler (assoc request :user user-id))
       (handler request))))
+
+;; Determine if initialization has already occurred by checking
+;; servlet context; if not then do any initialization and set state in
+;; servlet context.
+(defn wrap-context [handler]
+  (fn [request]
+    (handle-servlet-context (:servlet-context request))
+    (handler request)))
+  
 
 ;; # Current session and cookie information
 ;;
@@ -109,11 +128,13 @@
   ;;   (ANY "/repl" request (nrepl-handler request)))
 
   (GET "/" {cookies :cookies session :session :as request}
+    (handle-servlet-context (:servlet-context request))
     (->
      (set-session-username cookies session (termlist-submission-form request "Custom Taxonomy Builder"))
      (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
+    (handle-servlet-context (:servlet-context request))
      (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
        {:body
         (case cmd
@@ -132,12 +153,14 @@
         :headers {"Content-Type" "text/html"}}))
 
   (POST "/filtertermlist/" req
+    (handle-servlet-context (:servlet-context req))
     (write-filtered-termlist req)
     (->
      (filtered-termlist-view req)
      (assoc-in [:headers "Content-Type"] "text/html")))
 
   (POST "/processfiltertermlist/" req
+    (handle-servlet-context (:servlet-context req))
     (->
     {:body (do
              (write-filtered-termlist req)
@@ -148,6 +171,7 @@
     (assoc-in [:headers "Content-Type"] "text/html")))
 
   (GET "/sessioninfo/" req
+    (handle-servlet-context (:servlet-context req))
     {:body 
      (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
                                                                  req))
@@ -158,6 +182,7 @@
     
 
   (GET "/datasetsinfo/" {cookies :cookies session :session :as req}
+    (handle-servlet-context (:servlet-context req))
     {:body 
      (let [user (cond
                   (contains? session :user) (:user session)
@@ -171,16 +196,17 @@
                          (:TEMPDIR (util/context-params servlet-context))
                          "resources/public/output")]
            (display-dataset-list req user (map-user-datasets workdir user)))))
-     :session (:session session)
-     :cookies (:cookies cookies)
+     :session session
+     :cookies cookies
      :headers {"Content-Type" "text/html"}})
 
 
   (GET "/dataset/:dataset/:filename" {{dataset :dataset
                                        filename :filename} :params
-                             cookies :cookies
-                             session :session
-                             :as request}
+                                      cookies :cookies
+                                      session :session
+                                      :as request}
+    (handle-servlet-context (:servlet-context request))
     {:body 
      (let [user (cond
                   (contains? session :user) (:user session)
@@ -190,18 +216,41 @@
          (display-error-message request "Error: no username in session or cookie!")
          (let [^ServletContext servlet-context (:servlet-context request)
                workdir (if servlet-context
-                         ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
-                         (:TEMPDIR (util/context-params servlet-context))
+                         (get-servlet-context-tempdir servlet-context)
                          "resources/public/output")
                filepath (map-user-dataset-filename workdir user dataset filename)]
            (if (.exists (io/file filepath))
              (slurp filepath)
              (str "File: " filename "(" filepath ") does not exist.")
              ))))
-     :session (:session session)
-     :cookies (:cookies cookies)
+     :session session
+     :cookies cookies
      :headers {"Content-Type" "text/html"}})
   
+  ;; given a termlist in POST request skip filter step and go directly
+  ;; to mrconso generation.
+  ;; Note: we need to use piped-input-stream to avoid running out of memory.
+  (POST "/rest/mrconso" {params :params :as request}
+    (handle-servlet-context (:servlet-context request))
+    ;; (let [{termlist "termlist"} params
+    ;;       cui-concept-map (expand-cui-concept-map (termlist-to-cui-concept-map termlist))
+    ;;       stream-mrconso (fn [out]
+    ;;                        (dorun
+    ;;                         (map #(.write out %)
+    ;;                              (cui-concept-map-to-mrconso-recordlist cui-concept-map))))]
+    ;;   (piped-input-stream #(stream-mrconso (io/make-writer % {})))))
+    (stream-mrconso params))
+  
+  ;; given a termlist in POST request skip filter step and go directly
+  ;; to mrsty generation.
+  (POST "/rest/mrsty"  {params :params :as request}
+    (handle-servlet-context (:servlet-context request))
+    (let [{termlist "termlist"} params
+          cuiset (termlist-to-cuiset termlist)
+          stream-mrsty (fn [out]
+                         (cuicoll-to-custom-mrsty-write out cuiset))]
+      (piped-input-stream #(stream-mrsty (io/make-writer % {})))))
+
   (resources "/")
 
   )
