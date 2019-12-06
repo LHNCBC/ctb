@@ -2,6 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :refer [trim]]
+            [clojure.tools.logging :as log]
             [digest]
             [compojure.core :refer [defroutes GET POST ANY]]
             [compojure.route :refer [resources]]
@@ -13,6 +14,7 @@
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cookies :refer [wrap-cookies]]
             [ring.util.io :refer [piped-input-stream]]
+            [org.lpetit.ring.servlet.util :as util]
             [ctb.manage-datasets :refer [map-user-datasets
                                          map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
@@ -25,6 +27,9 @@
                                display-error-message
                                display-dataset-list
                                user-error-message]]
+            [ctb.ring-utils :refer [get-context-attribute]]
+            [ctb.process-config :refer [handle-servlet-context
+                                        handle-servlet-context-path]]
             [ctb.process :refer [mirror-termlist
                                  process-termlist
                                  ;; process-termlist-and-termlistfile
@@ -36,10 +41,8 @@
                                  expand-cui-concept-map
                                  termlist-to-cuiset
                                  cuicoll-to-custom-mrsty-write
-                                 handle-servlet-context
                                  get-servlet-context-tempdir
-                                 stream-mrconso]]
-            [org.lpetit.ring.servlet.util :as util])
+                                 stream-mrconso]])
   (:import (javax.servlet ServletContext)))
 
 (defn print-var
@@ -76,6 +79,15 @@
   (fn [request]
     (handle-servlet-context (:servlet-context request))
     (handler request)))
+
+;; Determine if initialization has already occurred by checking
+;; servlet context; if not then do any initialization and set state in
+;; servlet context.
+(defn wrap-context-path [handler]
+  (fn [request]
+    (handle-servlet-context-path (:servlet-context-path request))
+    (handler request)))
+
   
 
 ;; # Current session and cookie information
@@ -135,18 +147,19 @@
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
     (handle-servlet-context (:servlet-context request))
-     (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params]
+    (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params
+          appcontext (get-context-attribute request "ctbappcontext")]
        {:body
         (case cmd
           "submit"       (if (= (count (trim termlist)) 0)
                            (user-error-message request "User Input Error: Termlist is Empty" "User Input Error: Termlist is empty.")
-                           (synset-list-page request (process-termlist dataset termlist)))
-          "synset list"  (synset-list-page request (process-termlist dataset termlist))
+                           (synset-list-page request (process-termlist appcontext dataset termlist)))
+          "synset list"  (synset-list-page request (process-termlist appcontext dataset termlist))
           "test0"        (display-termlist request (mirror-termlist termlist))
-          "test1"        (expanded-termlist-review-page request (process-termlist dataset termlist))
-          "term->cui"    (term-cui-mapping-page request (process-termlist dataset termlist))
-          "synset table" (synset-table-page request (process-termlist dataset termlist))
-          (expanded-termlist-review-page request (process-termlist dataset termlist)) ; default
+          "test1"        (expanded-termlist-review-page request (process-termlist appcontext dataset termlist))
+          "term->cui"    (term-cui-mapping-page request (process-termlist appcontext dataset termlist))
+          "synset table" (synset-table-page request (process-termlist appcontext dataset termlist))
+          (expanded-termlist-review-page request (process-termlist appcontext dataset termlist)) ; default
           )
         :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
         :cookies cookies
@@ -162,13 +175,13 @@
   (POST "/processfiltertermlist/" req
     (handle-servlet-context (:servlet-context req))
     (->
-    {:body (do
-             (write-filtered-termlist req)
-             (process-filtered-synset req)
-             (filtered-termlist-view req))
-     :session (:session req)
-     :cookies (:cookies req)}
-    (assoc-in [:headers "Content-Type"] "text/html")))
+     {:body (do
+              (write-filtered-termlist req)
+              (process-filtered-synset req)
+              (filtered-termlist-view req))
+      :session (:session req)
+      :cookies (:cookies req)}
+     (assoc-in [:headers "Content-Type"] "text/html")))
 
   (GET "/sessioninfo/" req
     (handle-servlet-context (:servlet-context req))

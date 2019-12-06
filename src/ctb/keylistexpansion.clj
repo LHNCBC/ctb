@@ -2,11 +2,9 @@
   (:require [clojure.set :refer [intersection union]]
             [clojure.string :refer [lower-case trim]]
             [skr.tokenization :as tokenization]
+            [skr.mwi-utilities :as mwi]
             [umls-tables.core :refer [mrconso-line-record-to-map]]
-            [ctb.umls-indexed :refer [*memoized-normalize-ast-string*
-                                      *mrconsostr-index*
-                                      *mrconsocui-index*
-                                      lookup] :as umls-indexed]
+            [ctb.umls-indexed :refer [lookup] :as umls-indexed]
             [lvg.core]
             [lvg.lvg :refer [get-acronym-expansions]]
             [lvg.fruitful :refer [get-fruitful-variants-lex]]))
@@ -78,73 +76,71 @@
 
 (defn terms-for-concept
   "List terms for concept identified by cui."
-  [cui]
-  (mapv #(*memoized-normalize-ast-string* (:str (mrconso-line-record-to-map %)))
-        (lookup *mrconsocui-index* cui)))
+  [indexes cui]
+  (mapv #(mwi/normalize-ast-string (:str (mrconso-line-record-to-map %)))
+        (lookup (:mrconsocui-index indexes) cui)))
 
 (defn get-umls-candidate-synonyms
   "Get candidate synonyms from UMLS for supplied term."
-  [term]
-  (let [normterm (*memoized-normalize-ast-string* term)
+  [indexes term]
+  (let [normterm (mwi/normalize-ast-string term)
         concepts-for-term (map #(:cui (mrconso-line-record-to-map %)) 
-                               (lookup *mrconsostr-index* normterm))]
+                               (lookup (:mrconsostr-index indexes) normterm))]
     (sort (into [] (reduce (fn [newset cui]
-                             (union newset (set (terms-for-concept cui))))
+                             (union newset (set (terms-for-concept indexes cui))))
                            #{} concepts-for-term)))))
-
-(def ^:dynamic *lvg-api* nil)
 
 (defn init-lvg
   [lvgdir]
   (when (not (nil? lvgdir))
-    (def ^:dynamic *lvg-api* (lvg.core/init lvgdir))))
+    (lvg.core/init lvgdir)))
 
 (defn get-lvg-fruitful-candidate-synonyms
   "Get candidate synonyms from LVG Fruitful Variants for supplied
   term."
-  [term]
+  [lvg-api term]
   (->> term
-       *memoized-normalize-ast-string*
-       get-fruitful-variants-lex
-       (map #(*memoized-normalize-ast-string* (:target-term %)))))
+       mwi/normalize-ast-string
+       (get-fruitful-variants-lex lvg-api)
+       (map #(mwi/normalize-ast-string (:target-term %)))))
 
 (defn get-lvg-expansions-candidate-synonyms
   "Get candidate synonyms from LVG acronym expansions for supplied
   term."
-  [term]
+  [lvg-api term]
   (->> term
-       *memoized-normalize-ast-string*
-       get-acronym-expansions
-       (map #(*memoized-normalize-ast-string* (:target-term %)))))
+       mwi/normalize-ast-string
+       (get-acronym-expansions lvg-api)
+       (map #(mwi/normalize-ast-string (:target-term %)))))
 
 (defn get-candidate-synonyms
   "Get candidate synonyms for supplied term.  If LVG is not available
   then just return UMLS candidates for term."
-  [term]
-  (if (nil? *lvg-api*)
-    (get-umls-candidate-synonyms term)
+  [lvg-api indexes term]
+  (if (nil? lvg-api)
+    (get-umls-candidate-synonyms indexes term)
     (conj (intersection
-           (set (get-lvg-fruitful-candidate-synonyms term))
-           (set (get-umls-candidate-synonyms term)))
+           (set (get-lvg-fruitful-candidate-synonyms lvg-api term))
+           (set (get-umls-candidate-synonyms indexes term)))
           term)))
 
 (defn generate-termlists
   "Generate termlists for term."
-  ([term]
-   (generate-termlists term get-candidate-synonyms))
-  ([term synonym-lookup-func]
-   (mapv synonym-lookup-func
+  ([lvg-api indexes term]
+   (generate-termlists lvg-api indexes term get-candidate-synonyms))
+  ([lvg-api indexes term synonym-lookup-func]
+   (mapv #(synonym-lookup-func lvg-api indexes %)
          (tokenization/tokenize-no-ws term))))
 
 (defn mark-term-expansions-cui-str-sab
   "Mark term expansions using cui-str-sab."
-  [term-smap]
+  [indexes term-smap]
   (assoc term-smap
          :term-expansion-lists
          (reduce (fn [newmap term]
-                   (let [normterm (*memoized-normalize-ast-string* term)
+                   (let [normterm (mwi/normalize-ast-string term)
                          concept-list (mapv #(select-keys (mrconso-line-record-to-map %) [:cui :str :sab])
-                                            (lookup *mrconsostr-index* normterm))]
+                                            (lookup (:mrconsostr-index indexes) normterm))]
                      (if (empty? concept-list)
                        newmap
                        (assoc newmap normterm concept-list))))
@@ -152,13 +148,14 @@
 
 (defn mark-term-expansions-with-cuis
   "Mark term expansions using concept unique identifiers (cuis)."
-  [term-smap]
+  [indexes term-smap]
   (assoc term-smap
          :term-expansion-lists
          (reduce (fn [newmap term]
-                   (let [normterm (*memoized-normalize-ast-string* term)
+                   (let [normterm (mwi/normalize-ast-string term)
                          concept-list (set (mapv #(:cui (mrconso-line-record-to-map %))
-                                                 (lookup *mrconsostr-index* normterm)))]
+                                                 (lookup (:mrconsostr-index indexes)
+                                                         normterm)))]
                      (if (empty? concept-list)
                        newmap
                        (assoc newmap normterm (set (concat (newmap normterm) concept-list))))))
@@ -188,9 +185,10 @@
 
 (defn expand-term
   "Return list of expanded versions of supplied term."
-  [term]
-  (let [termlists (generate-termlists term)]
+  [lvg-api indexes term]
+  (let [termlists (generate-termlists lvg-api indexes term)]
     (mark-term-expansions-with-cuis
+     indexes
      {:term term
       :term-expansion-lists (generate-term-expansion-lists termlists) }
      )))
@@ -198,9 +196,9 @@
 (defn termlist-info
   "Given a termlist, determine expansions that occur in knowledge
   source (UMLS) "
-  [termlist]
+  [lvg-api indexes termlist]
   (reduce (fn [newmap term]
-            (let [term-smap (expand-term term)
+            (let [term-smap (expand-term lvg-api indexes term)
                   cuilist (set (mapcat #(second %)
                                        (:term-expansion-lists term-smap)))]
               (assoc newmap
@@ -215,12 +213,13 @@
 (defn expand-term-with-lvg
   "Return list of expanded versions of supplied term using lvg version
    of get-candidate-synonyms with generate-termlist ."
-  [term]
-  (let [termlists (generate-termlists term)
+  [lvg-api indexes term]
+  (let [termlists (generate-termlists lvg-api indexes term)
         term-expansion-lists (generate-term-expansion-lists termlists)
         ;;(get-candidate-synonyms)
         ]
     (mark-term-expansions-with-cuis
+     indexes
      {:term term
       :term-expansion-lists term-expansion-lists
       :unfiltered-term-expansion-lists term-expansion-lists}
@@ -229,9 +228,9 @@
 (defn termlist-info-with-lvg
   "Given a termlist, determine expansions that occur in knowledge
   source (UMLS) "
-  [termlist]
+  [lvg-api indexes termlist]
   (reduce (fn [newmap term]
-            (let [term-smap (expand-term-with-lvg (trim term))
+            (let [term-smap (expand-term-with-lvg lvg-api indexes (trim term))
                   cuilist (set (mapcat #(second %)
                                        (:term-expansion-lists term-smap)))]
               (assoc newmap

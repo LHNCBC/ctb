@@ -181,7 +181,7 @@
 (defn generate-term-cui-conceptinfo-map
   "Generate map of term -> synsets from termlist, term-conceptid-map,
   and cui-concept-map."
-  [termlist term-conceptid-map cui-concept-map unmapped-term-expanded-info-map]
+  [indexes termlist term-conceptid-map cui-concept-map unmapped-term-expanded-info-map]
   (reduce (fn [term-map term]
             (let [nmterm (memoized-normalize-ast-string term)
                   cuiset (term-conceptid-map nmterm)]
@@ -189,7 +189,7 @@
                 (assoc term-map term
                        (reduce (fn [synset-map cui]
                                  (assoc synset-map
-                                        cui {:preferred-name (get-preferred-name cui)
+                                        cui {:preferred-name (get-preferred-name indexes cui)
                                              :termset (set (conj (map #(:str %)
                                                                        (cui-concept-map cui))
                                                                  term))
@@ -366,8 +366,8 @@
 (defn gen-mrsty-records
   "Generate a set of custom MRSTY records using custom Concept Unique
   Identifiers (CUIs)."
-  [cui]
-  (let [recordlist (get-mrsty-records cui)]
+  [indexes cui]
+  (let [recordlist (get-mrsty-records indexes cui)]
     (if (empty? recordlist)
       (vector (mrsty-line-record-to-map
                (format "%s|%s|%s|%s|%s|%s|%s" cui "T999" "Z" "Unknown" "" "" "")))
@@ -376,13 +376,11 @@
 (defn generate-custom-mrsty
   "Generate a custom version of MRSTY using MRSTY from MetaMorphoSys
   retaining only cuis in cuilist."
-  ([src-mrstyfn cuilist dst-mrstyfn]
-   (generate-custom-mrfile src-mrstyfn cuilist dst-mrstyfn))
-  ([cuilist dst-mrstyfn]
-   (write-custom-mrfile (flatten (mapv #(gen-mrsty-records %)
-                                       cuilist))
-                        rrf-mrsty/*rrf-mrsty-label-order*
-                        dst-mrstyfn)))
+  [indexes cuilist dst-mrstyfn]
+  (write-custom-mrfile (flatten (mapv #(gen-mrsty-records indexes %)
+                                      cuilist))
+                       rrf-mrsty/*rrf-mrsty-label-order*
+                       dst-mrstyfn))
 
 (defn custom-mrfile-write
   "Write UMLS-like MRxxx file to writer using records with

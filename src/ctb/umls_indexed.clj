@@ -21,7 +21,8 @@
 ;; * `*zzsty-index*` mrsty (abbreviated)
 ;; * `*mrsty-index*` mrstyrrf (full)
 ;; * `*mrsat-index*` mrsat (To be indexed)
-
+;;
+;; These are stored in the servlet-context attribute "ctbappcontext".
 
 (defn get-container [tablepath indexpath]
   (new InvertedFileContainer tablepath indexpath))
@@ -42,105 +43,117 @@
      (lookup index term)
      (vec (.getValue (.lookup index term))))))
 
-
-;; Paths to tables used by Java-based inverted file library
-;; use property ctb.ivf.dataroot to set data root of inverted file.
-(defonce ^:dynamic *dataroot* (System/getProperty "ctb.ivf.dataroot" "data/ivf/2016AA"))
-(defonce ^:dynamic *tablepath* (format "%s/%s" *dataroot* "tables"))
-(defonce ^:dynamic *indexpath* (format "%s/%s" *dataroot* "ifindices"))
-
 ;; Container for inverted file references
-
-;; (defonce ^:dynamic *container* (get-container *tablepath* *indexpath*))
-
-;; Inverted file references
-
-;; (defonce ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
-;; (defonce ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
-;; (defonce ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
-;; Currently disabled:
-;; (defonce ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
-;; (defonce ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
+;;
+;;    { :dataroot dataroot
+;;      :tablepath tablepath
+;;      :indexpath indexpath
+;;      :container container
+;;
+;;    ;; Inverted file references
+;;
+;;      :mrconsocui-index (get-index container "mrconso")
+;;      :mrconsostr-index (get-index container "mrconsostr")
+;;      :zzsty-index (get-index container "mrsty")
+;;    ;; :mrsat-index (get-index container "mrsat")
+;;    ;  :mrsty-index (get-index container "mrstyrrf"))
+;;    }
 
 (defn init-index
+  "initialize inverted file indexes and return indexes in map."
   ([]
+    ;; Paths to tables used by Java-based inverted file library
+    ;; use property ctb.ivf.dataroot to set data root of inverted file.
    (init-index (System/getProperty "ctb.ivf.dataroot" "data/ivf/2016AA")
-                 "tables" "ifindices"))
-  ([dataroot tablepath indexpath]
-   (if (.exists (io/file dataroot))
-     (do
-       (def ^:dynamic *dataroot* dataroot)
-       (def ^:dynamic *tablepath* (format "%s/%s" dataroot tablepath))
-       (def ^:dynamic *indexpath* (format "%s/%s" dataroot indexpath))
-       (if (and (.exists (io/file *tablepath*))
-                (.exists (io/file *indexpath*)))
-         (do 
-           (def ^:dynamic *container* (get-container *tablepath* *indexpath*))
-           (def ^:dynamic *mrconsocui-index* (get-index *container* "mrconso"))
-           (def ^:dynamic *mrconsostr-index* (get-index *container* "mrconsostr"))
-           (def ^:dynamic *zzsty-index* (get-index *container* "mrsty"))
-           ;;   (def ^:dynamic *mrsat-index* (get-index *container* "mrsat"))
-           (def ^:dynamic *mrsty-index* (get-index *container* "mrstyrrf"))
-           "indexes initialized")
-         (do
-           (if (not (.exists (io/file *tablepath*)))
-             (log/error (format "ctb.umls-indexed/init-index: tablepath: %s does not exist." *tablepath*))
-             (if (not (.exists (io/file *indexpath*)))
-               (log/error (format "ctb.umls-indexed/init-index: indexpath: %s does not exist." *indexpath*)))))))
-     (log/error (format "dataroot: %s does not exist." dataroot))) ))
+               "tables" "ifindices"))
+  ([dataroot tabledir indexdir]
+   (let [tablepath (format "%s/%s" dataroot tabledir)
+         indexpath (format "%s/%s" dataroot indexdir)]
+     (if (and (.exists (io/file dataroot))
+              (.exists (io/file tablepath))
+              (.exists (io/file indexpath)))
+       (let [container (get-container tablepath indexpath)
+             mrconsocui-index (get-index container "mrconso")
+             mrconsostr-index (get-index container "mrconsostr")
+             zzsty-index (get-index container "mrsty")
+             mrsty-index (get-index container "mrstyrrf")
+             newindex-context (hash-map :dataroot dataroot
+                                     :tablepath tablepath
+                                     :indexpath indexpath
+                                     :container container
+                                     :mrconsocui-index mrconsocui-index
+                                     :mrconsostr-index mrconsostr-index 
+                                     :zzsty-index zzsty-index 
+                                     ;; :mrsat-index (get-index container "mrsat")
+                                     :mrsty-index mrsty-index )]
+         (log/info "indexes initialized")
+         newindex-context)
+       (do
+         (if (not (.exists (io/file dataroot)))
+           (log/error (format "dataroot: %s does not exist." dataroot)))
+         (if (not (.exists (io/file tablepath)))
+           (log/error (format "ctb.umls-indexed/init-index: tablepath: %s does not exist." tablepath)))
+         (if (not (.exists (io/file indexpath)))
+           (log/error (format "ctb.umls-indexed/init-index: indexpath: %s does not exist." indexpath)))
+         {})))))
 
-(defonce ^:dynamic *memoized-normalize-ast-string* (memoize mwi/normalize-ast-string))
+(defn memoized-normalize-ast-string
+  "return memoized version of normalize-ast-string"
+  []
+  (memoize mwi/normalize-ast-string))
 
 (defn generate-term-conceptid-map
   "Generate map of term -> conceptids"
-  [termlist]
-  (let [termset (set (map *memoized-normalize-ast-string* termlist))]
+  [indexes termlist]
+  (let [termset (set (map mwi/normalize-ast-string termlist))]
     (reduce (fn [newmap term]
               (assoc newmap term
                      (set (map #(:cui (mrconso-line-record-to-map %))
-                               (lookup *mrconsostr-index* term)))))
+                               (lookup (:mrconsostr-index indexes) term)))))
             {} termset)))
-  
+
 (defn generate-term-conceptid-set
   "Generate set of conceptids corresponding to termlist"
-  [termlist]
-  (let [termset (set (map *memoized-normalize-ast-string* termlist))]
+  [indexes termlist]
+  (let [termset (set (map mwi/normalize-ast-string termlist))]
     (reduce (fn [newset term]
               (union newset (set (map #(:cui (mrconso-line-record-to-map %))
-                                      (lookup *mrconsostr-index* term)))))
+                                      (lookup (:mrconsostr-index indexes) term)))))
             #{} termset)))
 
 (defn generate-cui-concept-map-from-cuiset
   "Generate cui -> concept-records map."
-  [cuiset]
+  [indexes cuiset]
   (reduce (fn [newmap cui]
-            (assoc newmap cui (concat (newmap cui) (map mrconso-line-record-to-map
-                                                        (lookup *mrconsocui-index* cui false)))))
+            (assoc newmap cui (concat (newmap cui)
+                                      (map mrconso-line-record-to-map
+                                           (lookup
+                                            (:mrconsocui-index indexes) cui false)))))
           {} cuiset))
 
 (defn get-mrconso-records-with-preferred-name
   "Return str field of first MRCONSO record with TS field equal to \"P\" and STT field equal to \"PF\". "
-  [cui]
+  [indexes cui]
   (filter #(and (= (:ts %) "P") (= (:stt %) "PF"))
           (map mrconso-line-record-to-map
-               (lookup *mrconsocui-index* cui false))))
+               (lookup (:mrconsocui-index indexes) cui false))))
 
 (defn get-preferred-name
   "Return str field of first MRCONSO record with TS field equal to \"P\" and STT field equal to \"PF\". "
-  [cui]
-  (:str (first (get-mrconso-records-with-preferred-name cui))))
+  [indexes cui]
+  (:str (first (get-mrconso-records-with-preferred-name indexes cui))))
 
 (defn get-mrsat-records
   "Get MRSAT records for cui (concept unique identifier) (currently
   not implemented)."
-  [cui]
-  ;; (map mrsat-line-record-to-map (lookup *mrsat-index* cui))
+  [indexes cui]
+  ;; (map mrsat-line-record-to-map (lookup (:mrsat-index indexes) cui))
   )
 
 (defn get-mrsty-records
   "Get MRSTY records for cui (concept unique identifier)."
-  [cui]
+  [indexes cui]
   (map mrsty-line-record-to-map
-       (lookup *mrsty-index* cui)))
+       (lookup (:mrsty-index indexes) cui)))
 
 
