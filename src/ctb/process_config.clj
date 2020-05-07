@@ -1,5 +1,5 @@
 (ns ctb.process-config
-  (:require [ctb.process :refer [init]]
+  (:require [ctb.backend :refer [init]]
             [clojure.tools.logging :as log]
             [org.lpetit.ring.servlet.util :as util])
   (:import (javax.servlet ServletContext)))

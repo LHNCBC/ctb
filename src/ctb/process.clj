@@ -4,83 +4,50 @@
             [clojure.set :refer [union intersection difference]]
             [clojure.tools.logging :as log]
             [ring.util.io :refer [piped-input-stream]]
-            [org.lpetit.ring.servlet.util :as util]
-            [clj-time.core :refer [time-now]]
             [digest]
             [ctb.umls-indexed :as umls-indexed]
             [ctb.synsetgen :as synset]
             [ctb.umls-indexed :refer [init-index]]
+            [ctb.backend :refer [init
+                                 init-using-servlet-context
+                                 init-standalone]]
             [ctb.keylistexpansion :refer [termlist-info
-                                          init-lvg
                                           termlist-info-with-lvg]]
-            [ctb.ring-utils :refer [get-context-attribute]])
+            [ctb.ring-utils :refer [TEMPDIR get-context-attribute]])
   (:import (java.lang.Boolean)
            (java.util Properties)
            (javax.servlet ServletContext)
            (java.io File Reader Writer))
-  (:gen-class))
+  (:gen-class)
+  )
 
 ;; Place a reference to application context here.  Currently,
 ;; application context is retrieved from servlet context when using Apache
 ;; Tomcat.
 (def appcontext (atom {}))
 
-;; # Backend Processing Functions
+(defn get-appcontext-original
+  "Attempt to get application context from servlet context,
+  if not available, check for context in atom, if not available, the
+  create new application context, place in new context atom and then
+  return it."
+  [request]
+  (let [servlet-ctbappcontext (get-context-attribute request "ctbappcontext")]
+    (cond servlet-ctbappcontext servlet-ctbappcontext
+          @appcontext @appcontext 
+          :else (let [new-app-context (init)]
+                  (when (nil? new-app-context)
+                    (do (log/error "error creating application context.")))))))
 
-(defn init
-  "Initialize any needed resources, resource are returned as map to caller."
-  ([]
-    (init "" "data" "config"))
-  ([context]
-   (let [root-path (.getRealPath ^ServletContext context "/")
-         data-path (.getRealPath ^ServletContext context "/data/")
-         config-path (.getRealPath ^ServletContext context "/config/")]
-       (log/debug "calling init: with paramters: " root-path ", " data-path ", " config-path)
-     (.setAttribute ^ServletContext context "ctbappcontext" (init root-path data-path config-path))))
-  ([root-path data-path config-path]
-   (log/debug "root-path: " root-path ", data-path: " data-path ", config-path: " config-path)
-   ;; Load CBT properties from config/ctb.properties (settable by system
-   ;; property "ctb.property.file")  (should this be in ctb.webapp/init?)
-   (let [config-file-path (str config-path "ctb.properties")
-         config-properties (if (.exists (io/file config-file-path))
-                             (doto (Properties.)
-                                   (.load ^Reader (io/reader config-file-path)))
-                             (do (log/error (format "ctb.process/init: config file %s does not exist."
-                                                    config-file-path))
-                                 nil))
-         ivf-dataroot (str root-path (.getProperty config-properties "ctb.ivf.dataroot"))
-         lvg-path (.getProperty config-properties "ctb.lvg.directory")
-         lvg-directory (str root-path lvg-path)
-         hide-vocab-sources ^boolean (Boolean/parseBoolean (.getProperty config-properties "ctb.hide.vocab.sources"))
-         ;; inverted file initialization
-         ivf-indexes  (if (.exists (io/file ivf-dataroot))
-                        (init-index ivf-dataroot "tables" "ifindices")
-                        (do (log/error (format "ctb.process/init: data root file %s does not exist!" ivf-dataroot))
-                            { "error" (str "error couldn't load indexes at " ivf-dataroot) }))
-         ;; lvg initialization
-         lvg-api (when (not (nil? lvg-path))
-                     (if (.exists (io/file lvg-directory))
-                       (init-lvg lvg-directory)
-                       (do 
-                         (log/error (format "ctb.process/init: lvg directory %s does not exist." lvg-directory))
-                         nil)))
-         newappcontext (hash-map :config-file-path config-file-path
-                                 :config-properties config-properties
-                                 :ivf-dataroot ivf-dataroot
-                                 :ivf-indexes ivf-indexes
-                                 :lvg-path lvg-path
-                                 :lvg-initialized (not (nil? lvg-api))
-                                 :lvg-api lvg-api
-                                 :hide-vocab-sources hide-vocab-sources)]
-     (log/debug (format "ctb.ivf.dataroot: %s" ivf-dataroot))
-     (log/debug (format "ctb.lvg.directory: %s" lvg-directory))
-     (log/debug (str "hide-vocab-sources: " hide-vocab-sources))
-     (log/debug (format "lvg-api: %s" lvg-api))
-     ;; tell synsetgen if vocabulary source abbreviation should be obscured.
-     (synset/set-hide-vocab-sources! hide-vocab-sources)
-     (reset! appcontext newappcontext)
-     (log/debug "appcontext:" @appcontext)
-     newappcontext)))
+(defn get-appcontext
+  "just initialize a new context (this is wasteful.)"
+  [request]
+  (log/info "request keys: " (keys request))
+  (if (contains? request :servlet-context)
+    (do (log/warn "servlet-context: " (:servlet-context request))
+        (init ^ServletContext (:servlet-context request)))
+    (do (log/warn "calling init-standalone...")
+        (init-standalone))))
 
 (defn print-request
   [request]
@@ -203,15 +170,12 @@
   "Get temporary storage directory from servlet context."
   [^ServletContext servlet-context]
   (let [tempdir (if servlet-context
-                  ;; (.getPath (.getAttribute servlet-context "javax.servlet.context.tempdir"))
-                  (:TEMPDIR (util/context-params servlet-context))
+                  (do (.getPath (io/file (.getAttribute servlet-context TEMPDIR)))
+                      (log/debug "(.getAttribute servlet-context TEMPDIR): "
+                                 (.getAttribute servlet-context TEMPDIR))
+                      (log/debug "(.getAttribute servlet-context \"javax.servlet.context.tempdir\"): "
+                                 (.getPath (io/file (.getAttribute servlet-context "javax.servlet.context.tempdir")))))
                   "resources/public/output")]
-    ;; (log/debug "(.getAttribute servlet-context ServletContext/TEMPDIR): "
-    ;;           (.getAttribute servlet-context ServletContext/TEMPDIR))
-    (log/debug "(:TEMPDIR (util/context-params servlet-context)): "
-              (:TEMPDIR (util/context-params servlet-context)))
-    (log/debug "(.getAttribute servlet-context \"javax.servlet.context.tempdir\"): "
-              (.getPath (.getAttribute servlet-context "javax.servlet.context.tempdir")))
     (if (nil? tempdir)
       "/tmp"
       tempdir)))
@@ -298,10 +262,10 @@
   ([request]
    (let [params (:params request)
          ^ServletContext servlet-context (:servlet-context request)
-         appcontext (get-context-attribute request "ctbappcontext")
+         appcontext (get-appcontext request)
+         ;; Get :dataset and :user values from :session part of request.
          user (-> request :cookies (get "termtool-user") :value)
-         dataset (-> request :session :dataset) ; Get :dataset and :user values
-                                        ; from :session part of request.
+         dataset (-> request :session :dataset) 
          filtered-synset (synset-view-params-to-filtered-synset params)
          termlist (keys filtered-synset)
          synonyms-checksum (digest/sha-1 (join "|" (list-term-synonyms params)))
@@ -472,7 +436,7 @@
         cui-concept-map (expand-cui-concept-map (termlist-to-cui-concept-map termlist))
         stream-mrconso (fn [out]
                          (dorun
-                          (map #(do (.write ^Writer out %)
+                          (map #(do (.write ^Writer out ^String %)
                                     (.flush ^Writer out))
                                (cui-concept-map-to-mrconso-recordlist cui-concept-map))
                           (.flush ^Writer out)))]

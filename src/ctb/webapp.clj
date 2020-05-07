@@ -27,10 +27,11 @@
                                display-error-message
                                display-dataset-list
                                user-error-message]]
-            [ctb.ring-utils :refer [get-context-attribute]]
+            [ctb.ring-utils :refer [TEMPDIR get-context-attribute]]
             [ctb.process-config :refer [handle-servlet-context
                                         handle-servlet-context-path]]
-            [ctb.process :refer [mirror-termlist
+            [ctb.process :refer [get-appcontext
+                                 mirror-termlist                                 
                                  process-termlist
                                  ;; process-termlist-and-termlistfile
                                  write-filtered-termlist
@@ -77,7 +78,7 @@
 ;; servlet context.
 (defn wrap-context [handler]
   (fn [request]
-    (handle-servlet-context (:servlet-context request))
+    (get-appcontext request)
     (handler request)))
 
 ;; Determine if initialization has already occurred by checking
@@ -140,15 +141,14 @@
   ;;   (ANY "/repl" request (nrepl-handler request)))
 
   (GET "/" {cookies :cookies session :session :as request}
-    (handle-servlet-context (:servlet-context request))
+    (get-appcontext request)
     (->
      (set-session-username cookies session (termlist-submission-form request "Custom Taxonomy Builder"))
      (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
-    (handle-servlet-context (:servlet-context request))
     (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params
-          appcontext (get-context-attribute request "ctbappcontext")]
+          appcontext (get-appcontext request)]
        {:body
         (case cmd
           "submit"       (if (= (count (trim termlist)) 0)
@@ -166,14 +166,14 @@
         :headers {"Content-Type" "text/html"}}))
 
   (POST "/filtertermlist/" req
-    (handle-servlet-context (:servlet-context req))
+    (get-appcontext req)
     (write-filtered-termlist req)
     (->
      (filtered-termlist-view req)
      (assoc-in [:headers "Content-Type"] "text/html")))
 
   (POST "/processfiltertermlist/" req
-    (handle-servlet-context (:servlet-context req))
+    (get-appcontext req)
     (->
      {:body (do
               (write-filtered-termlist req)
@@ -184,18 +184,18 @@
      (assoc-in [:headers "Content-Type"] "text/html")))
 
   (GET "/sessioninfo/" req
-    (handle-servlet-context (:servlet-context req))
-    {:body 
-     (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
-                                                                 req))
-          "</ul>")
-     :session (:session req)
-     :cookies (:cookies req)
-     :headers {"Content-Type" "text/html"}})
+    (get-appcontext req)
+      {:body 
+       (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
+                                                                   req))
+            "</ul>")
+       :session (:session req)
+       :cookies (:cookies req)
+       :headers {"Content-Type" "text/html"}})
     
 
   (GET "/datasetsinfo/" {cookies :cookies session :session :as req}
-    (handle-servlet-context (:servlet-context req))
+    (get-appcontext req)
     {:body 
      (let [user (cond
                   (contains? session :user) (:user session)
@@ -205,9 +205,9 @@
          (display-error-message req "Error: no username in session or cookie!")
          (let [^ServletContext servlet-context (:servlet-context req)
                workdir (if servlet-context
-                         ;;(.getAttribute servlet-context ServletContext/TEMPDIR)
-                         (:TEMPDIR (util/context-params servlet-context))
+                         (get-servlet-context-tempdir servlet-context)
                          "resources/public/output")]
+           (log/info "workdir: " workdir)
            (display-dataset-list req user (map-user-datasets workdir user)))))
      :session session
      :cookies cookies
@@ -219,7 +219,7 @@
                                       cookies :cookies
                                       session :session
                                       :as request}
-    (handle-servlet-context (:servlet-context request))
+    (get-appcontext request)
     {:body 
      (let [user (cond
                   (contains? session :user) (:user session)
@@ -244,7 +244,7 @@
   ;; to mrconso generation.
   ;; Note: we need to use piped-input-stream to avoid running out of memory.
   (POST "/rest/mrconso" {params :params :as request}
-    (handle-servlet-context (:servlet-context request))
+    (get-appcontext request)
     ;; (let [{termlist "termlist"} params
     ;;       cui-concept-map (expand-cui-concept-map (termlist-to-cui-concept-map termlist))
     ;;       stream-mrconso (fn [out]
@@ -257,7 +257,7 @@
   ;; given a termlist in POST request skip filter step and go directly
   ;; to mrsty generation.
   (POST "/rest/mrsty"  {params :params :as request}
-    (handle-servlet-context (:servlet-context request))
+    (get-appcontext request)
     (let [{termlist "termlist"} params
           cuiset (termlist-to-cuiset termlist)
           stream-mrsty (fn [out]
