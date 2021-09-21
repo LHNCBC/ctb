@@ -159,7 +159,7 @@
    [:title title]
    (include-css (str (:context request) "/css/base.css"))
    (include-css (str (:context request) "/css/style.css"))
-   (include-js (str (:context request) "/js/jquery-1.4.2.min.js"))
+   (include-js (str (:context request) "/js/jquery-3.6.0.min.js"))
    (include-js (str (:context request) "/js/jquery.collapsibleCheckboxTree.js"))
    (include-css (str (:context request) "/css/jquery.collapsibleCheckboxTree.css"))
    [:script {:type "text/javascript"}
