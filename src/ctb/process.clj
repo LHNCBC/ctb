@@ -5,6 +5,7 @@
             [clojure.tools.logging :as log]
             [ring.util.io :refer [piped-input-stream]]
             [digest]
+            [hiccup.util]
             [ctb.umls-indexed :as umls-indexed]
             [ctb.synsetgen :as synset]
             [ctb.umls-indexed :refer [init-index]]
@@ -123,7 +124,8 @@
   collapsible tree."
   [appcontext dataset newtermlist]
   (let [termlist (if (string? newtermlist)
-                   (termlist-string-to-vector newtermlist)
+                   (termlist-string-to-vector
+                    (hiccup.util/escape-html newtermlist))
                    newtermlist)
         term-conceptid-map (umls-indexed/generate-term-conceptid-map (:ivf-indexes appcontext) termlist)
         term-conceptid-set (reduce #(union %1 %2) (vals term-conceptid-map))
