@@ -5,7 +5,7 @@
             [clojure.tools.logging :as log]
             [ring.util.io :refer [piped-input-stream]]
             [digest]
-            [hiccup.util]
+            [hiccup.util :refer [escape-html]]
             [ctb.umls-indexed :as umls-indexed]
             [ctb.synsetgen :as synset]
             [ctb.umls-indexed :refer [init-index]]
@@ -124,8 +124,7 @@
   collapsible tree."
   [appcontext dataset newtermlist]
   (let [termlist (if (string? newtermlist)
-                   (termlist-string-to-vector
-                    (hiccup.util/escape-html newtermlist))
+                   (termlist-string-to-vector newtermlist)
                    newtermlist)
         term-conceptid-map (umls-indexed/generate-term-conceptid-map (:ivf-indexes appcontext) termlist)
         term-conceptid-set (reduce #(union %1 %2) (vals term-conceptid-map))
@@ -182,13 +181,25 @@
       "/tmp"
       tempdir)))
 
+(defn sanitize-params
+  [params-map]
+  (->> (dissoc params-map "submit") ; remove submit before sanitizing
+       (into {} 
+             (map (fn [[k v]]
+                    (let [[srcstring cui derivedstring] (split k #"\|")]
+                      (vector (join "|" (vector (escape-html srcstring)
+                                                (escape-html cui)
+                                                (escape-html derivedstring)))
+                              v)))))))
+
 (defn write-filtered-termlist
   ([req]
    (let [^ServletContext servlet-context (:servlet-context req)
          tmpfolder (get-servlet-context-tempdir servlet-context)]
      (write-filtered-termlist (str tmpfolder "/filtered-termlist.edn") req)))
   ([filename req]
-   (spit filename (pr-str (dissoc (:params req) "submit")))))       ; remove submit before writing
+   (let [params-map (sanitize-params (:params req))]
+     (spit filename (pr-str params-map)))))
 
 (defn list-term-synonyms
   [params]
@@ -262,7 +273,7 @@
 (defn process-filtered-synset
   "Generate MRCONSO and MRSTY files using termlist edited by user."
   ([request]
-   (let [params (:params request)
+   (let [params (sanitize-params (:params request))
          ^ServletContext servlet-context (:servlet-context request)
          appcontext (get-appcontext request)
          ;; Get :dataset and :user values from :session part of request.

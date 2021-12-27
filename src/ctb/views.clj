@@ -1,10 +1,12 @@
 (ns ctb.views
   (:require [clojure.string :refer [join]]
+            [clojure.java.io :as io]
             [hiccup.core :refer [html]]
             [hiccup.page :refer [doctype include-css include-js xhtml xhtml-tag]]
             [hiccup.util]
             [ctb.umls-indexed :refer [get-preferred-name]]
-            [ctb.process :refer [list-data-set-names]]))
+            [ctb.process :refer [list-data-set-names
+                                 sanitize-params]]))
 
 ;; # HTML Views
 ;;
@@ -35,6 +37,26 @@
       [:a {:href (str (:context request) "/")} *front-page-title*]) " | "
     [:a {:href "http://ii.nlm.nih.gov"} "Indexing Initiative"]]])
 
+(defn apply-banner-static
+  "Apply banner if present in properties."
+  [request]
+  [:p {:style "border-style:solid;border-width;1px;border-color:red;padding:2px;font-size:17px;"}
+   "Because of a lapse in government funding, the information on this
+website may not be up to date, transactions submitted via the website
+may not be processed, and the agency may not be able to respond to
+inquiries until appropriations are enacted.  The NIH Clinical Center
+(the research hospital of NIH) is open. For more details about its
+operating status, please
+visit " [:a {:href "https://cc.nih.gov/"} "cc.nih.gov"] ".  Updates regarding
+government operating status and resumption of normal operations can be
+found at " [:a {:href "https://USA.gov/"} "USA.gov"] "."])
+
+(defn apply-banner
+  [request]
+  (if (.exists (io/file "banner.html"))
+    (slurp "banner.html")
+    [:br]))
+
 (defn view-layout
   "Base view layout."
   [request title & content]
@@ -42,7 +64,8 @@
    (doctype :xhtml-strict)
    (xhtml-tag "en"
               (gen-header-simple request title)
-              [:body 
+              [:body
+               (apply-banner request)
                [:div {:id "content"} 
                 content
                 (gen-footer title)
@@ -249,7 +272,7 @@ jQuery(document).ready(function(){
 (defn filtered-termlist-view
   "View generated after processing termlist filtered by user."
   [request]
-  (let [params (:params request)
+  (let [params (sanitize-params (:params request))
         user (-> request :cookies (get "termtool-user") :value) ; get :user values from cookie part of request
         dataset (-> request :session :dataset) ; Get :dataset from :session part of request.
         workurl (if (:context request)

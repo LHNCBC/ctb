@@ -15,6 +15,7 @@
             [ring.middleware.cookies :refer [wrap-cookies]]
             [ring.util.io :refer [piped-input-stream]]
             [org.lpetit.ring.servlet.util :as util]
+            [hiccup.util]
             [ctb.manage-datasets :refer [map-user-datasets
                                          map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
@@ -147,8 +148,9 @@
      (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
-    (let [{cmd "cmd" termlist "termlist" dataset "dataset"} params
-          appcontext (get-appcontext request)]
+    (let [{cmd "cmd" rawtermlist "termlist" dataset "dataset"} params
+          appcontext (get-appcontext request)
+          termlist (hiccup.util/escape-html rawtermlist)]
        {:body
         (case cmd
           "submit"       (if (= (count (trim termlist)) 0)
@@ -186,8 +188,10 @@
   (GET "/sessioninfo/" req
     (get-appcontext req)
       {:body 
-       (str "request: <ul> <li>" (clojure.string/join "<li>" (mapv #(format "%s -> %s" (first %) (second %))
-                                                                   req))
+       (str "request: <ul> <li>"
+            (clojure.string/join
+             "<li>" (mapv #(format "%s -> %s" (first %) (second %))
+                          req))
             "</ul>")
        :session (:session req)
        :cookies (:cookies req)
