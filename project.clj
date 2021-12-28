@@ -7,8 +7,10 @@
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/data.csv "0.1.4"]
                  [org.clojure/data.xml "0.0.8"]
-                 [org.clojure/data.zip "0.1.2"]
-                 [org.clojure/tools.logging "1.1.0"]
+                 [org.clojure/data.zip "0.1.3"]
+                 [org.slf4j/slf4j-api "1.7.32"]
+                 [org.slf4j/slf4j-nop "1.7.32"]
+                 [org.clojure/tools.logging "1.2.3"]
                  [digest "1.4.4"]
                  [hiccup "1.0.5"]
                  [compojure "1.6.1"]
@@ -22,7 +24,7 @@
                  [lvgclj "0.1.0-SNAPSHOT"]
                  [org.lpetit.ring/ring-java-servlet "0.2.0"]
                  [clj-time "0.15.2"]
-                 [log4j/log4j "1.2.17"]]
+                 ]
   :dev {:dependencies [[javax.servlet/servlet-api "2.5"]]}
   :plugins [[lein-ring "0.12.5"]]
   :ring {:handler ctb.webapp/app
@@ -32,7 +34,7 @@
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
   :target-path "target/%s"
-  :jvm-opts ["-Dclojure.tools.logging.factory=clojure.tools.logging.impl/log4j-factory"]
+  :jvm-opts ["-Dclojure.tools.logging.factory=clojure.tools.logging.impl/slf4j-factory"]
   :aot [ctb.core
         ctb.process-config
         ctb.ctblistener
