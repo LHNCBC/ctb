@@ -2,6 +2,21 @@
   (:require [clojure.java.io :as io])
   (:import (java.io File)))
 
+(def whitelist
+  "allowed filenames"
+  #{"filtered-synset.edn"
+    "filtered-termlist.edn"
+    "mrconso.rrf"
+    "mrsty.rrf"
+    "params.txt"
+    "synonyms.checksum"
+    "termlist.txt"})
+
+(defn in-whitelist
+  "Is file in whitelist?"
+  [filename]
+  (contains? whitelist filename))
+
 (defn list-file-absolute-paths
   [directory]
   (map #(.getAbsolutePath %)

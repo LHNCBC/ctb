@@ -1,7 +1,7 @@
 (ns ctb.webapp
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :refer [trim]]
+            [clojure.string :refer [trim index-of]]
             [clojure.tools.logging :as log]
             [digest]
             [compojure.core :refer [defroutes GET POST ANY]]
@@ -16,7 +16,8 @@
             [ring.util.io :refer [piped-input-stream]]
             [org.lpetit.ring.servlet.util :as util]
             [hiccup.util]
-            [ctb.manage-datasets :refer [map-user-datasets
+            [ctb.manage-datasets :refer [in-whitelist
+                                         map-user-datasets
                                          map-user-dataset-filename]]
             [ctb.views :refer [termlist-submission-form
                                display-termlist
@@ -205,7 +206,8 @@
                   (contains? session :user) (:user session)
                   (contains? cookies "termtool-user") (-> cookies (get "termtool-user") :value)
                   :else "NoUserName")]
-       (if (= user "NoUserName")
+       (if (and (index-of user "..")
+                (= user "NoUserName"))
          (display-error-message req "Error: no username in session or cookie!")
          (let [^ServletContext servlet-context (:servlet-context req)
                workdir (if servlet-context
@@ -223,26 +225,31 @@
                                       cookies :cookies
                                       session :session
                                       :as request}
-    (get-appcontext request)
-    {:body 
-     (let [user (cond
-                  (contains? session :user) (:user session)
-                  (contains? cookies "termtool-user") (-> cookies (get "termtool-user") :value)
-                  :else "NoUserName")]
-       (if (= user "NoUserName")
-         (display-error-message request "Error: no username in session or cookie!")
-         (let [^ServletContext servlet-context (:servlet-context request)
-               workdir (if servlet-context
-                         (get-servlet-context-tempdir servlet-context)
-                         "resources/public/output")
-               filepath (map-user-dataset-filename workdir user dataset filename)]
-           (if (.exists (io/file filepath))
-             (slurp filepath)
-             (str "File: " filename "(" filepath ") does not exist.")
-             ))))
-     :session session
-     :cookies cookies
-     :headers {"Content-Type" "text/html"}})
+      (get-appcontext request)
+      {:body 
+       (if (in-whitelist filename)
+         (let [user (cond
+                      (contains? session :user) (:user session)
+                      (contains? cookies "termtool-user") (-> cookies
+                                                              (get "termtool-user")
+                                                              :value)
+                      :else "NoUserName")]
+           (if (= user "NoUserName")
+             (display-error-message request "Error: no username in session or cookie!")
+             (let [^ServletContext servlet-context (:servlet-context request)
+                   workdir (if servlet-context
+                             (get-servlet-context-tempdir servlet-context)
+                             "resources/public/output")
+                   filepath (map-user-dataset-filename workdir user dataset filename)]
+               
+               (if (.exists (io/file filepath))
+                 (slurp filepath)
+                 (str "File: " filename "(" filepath ") does not exist.")
+                 ))))
+         "Invalid datasetname.")
+       :session session
+       :cookies cookies
+       :headers {"Content-Type" "text/html"}})
   
   ;; given a termlist in POST request skip filter step and go directly
   ;; to mrconso generation.
