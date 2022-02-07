@@ -7,10 +7,12 @@
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/data.csv "0.1.4"]
                  [org.clojure/data.xml "0.0.8"]
-                 [org.clojure/data.zip "0.1.3"]
+                 [org.clojure/data.zip "1.0.0"]
                  [org.slf4j/slf4j-api "1.7.32"]
                  [org.slf4j/slf4j-nop "1.7.32"]
                  [org.clojure/tools.logging "1.2.3"]
+                 [org.owasp.encoder/encoder-esapi "1.2.3"
+                  :exclusions [org.owasp.esapi/esapi]]
                  [digest "1.4.4"]
                  [hiccup "1.0.5"]
                  [compojure "1.6.1"]
@@ -38,5 +40,7 @@
   :aot [ctb.core
         ctb.process-config
         ctb.ctblistener
-        ctb.ctbservlet]
+        ctb.ctbservlet
+        ctb.process
+        ctb.views]
   :main ctb.core)

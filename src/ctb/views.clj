@@ -6,7 +6,9 @@
             [hiccup.util]
             [ctb.umls-indexed :refer [get-preferred-name]]
             [ctb.process :refer [list-data-set-names
-                                 sanitize-params]]))
+                                 sanitize-params]])
+  (:import (org.owasp.encoder Encode))
+  (:gen-class))
 
 ;; # HTML Views
 ;;
@@ -74,15 +76,16 @@ found at " [:a {:href "https://USA.gov/"} "USA.gov"] "."])
 (defn expanded-termlist-review-page
   "Generate Termlist Review page view"
   [request synset]
-  (view-layout request "expanded termlist"
-               (vec (concat [:table {:border "1"}]
-                            (mapv (fn [[term cuimap]]
-                                    (vector :tr
-                                            (vec (concat (vector :td term)
-                                                    (mapv #(vector :td %)
-                                                          (keys cuimap))))))
-                                  synset)))))
-
+  (view-layout
+   request "expanded termlist"
+   (vec
+    (concat [:table {:border "1"}]
+            (mapv (fn [[term cuimap]]
+                    (vector :tr
+                            (vec (concat (vector :td term)
+                                         (mapv #(vector :td (Encode/forCDATA %))
+                                               (keys cuimap))))))
+                  synset)))))
 
 (defn termlist-submission-form
   "Generate Termlist submission form page view"
@@ -118,20 +121,25 @@ found at " [:a {:href "https://USA.gov/"} "USA.gov"] "."])
 (defn display-termlist
   "Generate Termlist View." 
   [request termlist]
-  (view-layout request "termlist"
-               (vec (concat [:ul] (mapv #(vector :li %) termlist)))))
+  (view-layout
+   request "termlist"
+   (vec (concat [:ul] (mapv #(vector :li (Encode/forCDATA %))
+                            termlist)))))
 
 (defn term-cui-mapping-page
   "Generate Term -> CUI mapping page view" 
   [request synset]
-  (view-layout request "expanded termlist"
-               (vec (concat [:table {:border "1"}]
-                            (mapv (fn [[term cuimap]]
-                                    (vector :tr
-                                            (vec (concat (vector :td term)
-                                                    (mapv #(vector :td %)
-                                                          (keys cuimap))))))
-                                  synset)))))
+  (view-layout
+   request "expanded termlist"
+   (vec
+    (concat
+     [:table {:border "1"}]
+     (mapv (fn [[term cuimap]]
+             (vector :tr
+                     (vec (concat (vector :td (Encode/forCDATA term))
+                                  (mapv #(vector :td %)
+                                        (keys cuimap))))))
+           synset)))))
 
 (defn gen-footer
   "Generate HTML footer for page, make front page link live if not at
@@ -153,18 +161,26 @@ found at " [:a {:href "https://USA.gov/"} "USA.gov"] "."])
    (concat
     [:table {:border "1"}]
     (mapv (fn [[term cuimap]]
-            [:tr [:th term]
-             [:td (vec (concat [:table {:border "1"}]
-                               (mapv (fn [[cui termlist]]
-                                       [:tr [:th cui]
-                                        [:td (vec (concat [:table {:border "1"}]
-                                                          (if (empty? termlist)
-                                                            [:tr [:td "<empty>"]]
-                                                            (mapv (fn [candidate-term]
-                                                                    [:tr [:td candidate-term]])
-                                                                  termlist))))]])
-                                     cuimap)))]])
-                     synset))))
+            [:tr
+             [:th (Encode/forCDATA term)]
+             [:td (vec
+                   (concat
+                    [:table {:border "1"}]
+                    (mapv (fn [[cui termlist]]
+                            [:tr
+                             [:th (Encode/forCDATA cui)]
+                             [:td (vec
+                                   (concat
+                                    [:table {:border "1"}]
+                                    (if (empty? termlist)
+                                      [:tr [:td "<empty>"]]
+                                      (mapv (fn [candidate-term]
+                                              [:tr
+                                               [:td
+                                                (Encode/forCDATA candidate-term)]])
+                                            termlist))))]])
+                          cuimap)))]])
+          synset))))
 
 (defn synset-table-page
   "Generate Synonym Set Table Page View"  
@@ -269,6 +285,8 @@ jQuery(document).ready(function(){
     (nested-synset-lists request synset)
     ]))
 
+
+
 (defn filtered-termlist-view
   "View generated after processing termlist filtered by user."
   [request]
@@ -276,8 +294,8 @@ jQuery(document).ready(function(){
         user (-> request :cookies (get "termtool-user") :value) ; get :user values from cookie part of request
         dataset (-> request :session :dataset) ; Get :dataset from :session part of request.
         workurl (if (:context request)
-                  (format "%s/dataset/%s" (:context request) dataset)
-                  (format "/dataset/%s" dataset))]
+                  (Encode/forCDATA (format "%s/dataset/%s" (:context request) dataset))
+                  (Encode/forCDATA (format "/dataset/%s" dataset)))]
     (view-layout request "Filtered TermList"
                  [:h1 "Filtered Termlist has been processed"] 
                  [:h2 "MRCONSO.RRF"]
@@ -294,7 +312,7 @@ jQuery(document).ready(function(){
                  [:h2 "Filtered TermList"]
                  (vec (concat [:ul ]
                               (mapv (fn [[k v]]
-                                      [:li (str k " -> " v)])
+                                      [:li (str (Encode/forCDATA k) " -> " (Encode/forCDATA v))])
                                     (sort
                                      (dissoc (:params request) "submit")))))
                  [:p
@@ -308,27 +326,33 @@ jQuery(document).ready(function(){
   [request message]
   (view-layout request message
                [:h1 "Error"]
-               [:p [:strong message]]))
+               [:p [:strong (Encode/forCDATA message)]]))
 
 (defn display-dataset-list
   "Generate HTML page including dataset list for user. "
   [request username dataset-map]
   (let [workurl (if (:context request)
-                  (format "%s/dataset" (:context request))
+                  (format "%s/dataset" (Encode/forCDATA (:context request)))
                   "/dataset")
         dataset-rendering (mapv
                            (fn [[dataset filenames]]
-                             (vector :li dataset
-                                     (vec (concat [:ul]
-                                                  (mapv
-                                                   #(vector :li
-                                                            [:a {:href
-                                                                 (format "%s/%s/%s" workurl dataset %)}
-                                                             %])
-                                                   filenames)))))
+                             (vector
+                              :li (Encode/forCDATA dataset)
+                              (vec
+                               (concat
+                                [:ul]
+                                (mapv
+                                 #(vector
+                                   :li
+                                   [:a {:href
+                                        (format "%s/%s/%s"
+                                                (Encode/forCDATA workurl)
+                                                (Encode/forCDATA dataset) %)}
+                                    %])
+                                 filenames)))))
               dataset-map)]
-    (view-layout request (str "DataSet list for " username)
-                 [:h1 (str "DataSet list for user " username)]
+    (view-layout request (str "DataSet list for " (Encode/forCDATA username))
+                 [:h1 (str "DataSet list for user " (Encode/forCDATA username))]
                  (vec (concat [:ui] dataset-rendering))
                )))
 
@@ -339,5 +363,5 @@ jQuery(document).ready(function(){
   (view-layout
    request title
    [:div {:id "panel"}
-    [:h1 title]
-    [:p [:strong message]]]))
+    [:h1 (Encode/forCDATA title)]
+    [:p [:strong (Encode/forCDATA message)]]]))
