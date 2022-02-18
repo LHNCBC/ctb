@@ -3,7 +3,7 @@
   :url "http://ii.nlm.nih.gov/"
   :license {:name "Public Domain"
             :url "http://www.usa.gov/government-works"}
-  :dependencies [[org.clojure/clojure "1.9.0"]
+  :dependencies [[org.clojure/clojure "1.10.3"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/data.csv "0.1.4"]
                  [org.clojure/data.xml "0.0.8"]
@@ -31,8 +31,8 @@
   :plugins [[lein-ring "0.12.5"]]
   :ring {:handler ctb.webapp/app
          :web-xml "web.xml"}
-  :repositories [["ii" "https://metamap.nlm.nih.gov/maven2/"]
-                 ["jitpack" "https://jitpack.io"]]
+  :repositories [["ii" "https://metamap.nlm.nih.gov/maven2/"]]
+  ;;  ["jitpack" "https://jitpack.io"]
   :marginalia {:javascript ["mathjax/MathJax.js?config=default"]}
   :min-lein-version "2.5.0"
   :target-path "target/%s"
