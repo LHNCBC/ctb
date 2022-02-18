@@ -15,10 +15,11 @@
             [ctb.keylistexpansion :refer [termlist-info
                                           termlist-info-with-lvg]]
             [ctb.ring-utils :refer [TEMPDIR get-context-attribute]])
-  (:import (java.lang.Boolean)
+  (:import (java.lang Boolean)
            (java.util Properties)
            (javax.servlet ServletContext)
-           (java.io File Reader Writer))
+           (java.io File Reader Writer)
+           (org.owasp.encoder Encode))
   (:gen-class)
   )
 
@@ -187,10 +188,10 @@
        (into {} 
              (map (fn [[k v]]
                     (let [[srcstring cui derivedstring] (split k #"\|")]
-                      (vector (join "|" (vector (escape-html srcstring)
-                                                (escape-html cui)
-                                                (escape-html derivedstring)))
-                              v)))))))
+                      (vector (join "|" (vector (Encode/forCDATA srcstring)
+                                                (Encode/forCDATA cui)
+                                                (Encode/forCDATA derivedstring)))
+                              (Encode/forCDATA v))))))))
 
 (defn write-filtered-termlist
   ([req]

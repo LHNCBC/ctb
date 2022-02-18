@@ -10,7 +10,7 @@
             [ctb.umls-indexed :refer [init-index]]
             [ctb.keylistexpansion :refer [init-lvg]]
             [ctb.ring-utils :refer [TEMPDIR get-context-attribute]])
-  (:import (java.lang.Boolean)
+  (:import (java.lang Boolean)
            (java.util Properties)
            (javax.servlet ServletContext)
            (java.io File Reader Writer))
