@@ -6,7 +6,8 @@
             [hiccup.util]
             [ctb.umls-indexed :refer [get-preferred-name]]
             [ctb.process :refer [list-data-set-names
-                                 sanitize-params]])
+                                 sanitize-params
+                                 render-path]])
   (:import (org.owasp.encoder Encode))
   (:gen-class))
 
@@ -285,8 +286,6 @@ jQuery(document).ready(function(){
     (nested-synset-lists request synset)
     ]))
 
-
-
 (defn filtered-termlist-view
   "View generated after processing termlist filtered by user."
   [request]
@@ -294,8 +293,8 @@ jQuery(document).ready(function(){
         user (-> request :cookies (get "termtool-user") :value) ; get :user values from cookie part of request
         dataset (-> request :session :dataset) ; Get :dataset from :session part of request.
         workurl (if (:context request)
-                  (Encode/forCDATA (format "%s/dataset/%s" (:context request) dataset))
-                  (Encode/forCDATA (format "/dataset/%s" dataset)))]
+                  (format "%s/dataset/%s" (:context request) dataset)
+                  (format "/dataset/%s" dataset))]
     (view-layout request "Filtered TermList"
                  [:h1 "Filtered Termlist has been processed"] 
                  [:h2 "MRCONSO.RRF"]
@@ -312,14 +311,13 @@ jQuery(document).ready(function(){
                  [:h2 "Filtered TermList"]
                  (vec (concat [:ul ]
                               (mapv (fn [[k v]]
-                                      [:li (str (Encode/forCDATA k) " -> " (Encode/forCDATA v))])
+                                      [:li (Encode/forHtmlContent (str  k " -> " v))])
                                     (sort
                                      (dissoc (:params request) "submit")))))
                  [:p
                   [:a {:href (str (:context request) "/datasetsinfo/")}
                    "Current Datasets"]]
                )))
-
 
 (defn display-error-message
   "Generate HTML page for error message"
