@@ -15,11 +15,14 @@
                   :exclusions [org.owasp.esapi/esapi]]
                  [digest "1.4.4"]
                  [hiccup "1.0.5"]
-                 [compojure "1.6.1"]
-                 [ring/ring-devel "1.8.1"]
-                 [ring/ring-core "1.8.1"]
-                 [ring/ring-jetty-adapter "1.8.0"]
-                 [ring-basic-authentication "1.0.5"]
+                 [compojure "1.6.2"]
+                 [ring/ring-devel "1.9.5"
+                  :exclusions [org.clojure/tools.namespace
+                               ring/ring-codec]]
+                 [ring/ring-core "1.9.5" :exclusions [ring/ring-codec]]
+                 [ring/ring-jetty-adapter "1.9.5"
+                  :exclusions [ring/ring-codec]]
+                 [ring-basic-authentication "1.1.1"]
                  [skr "0.1.2-SNAPSHOT"]
                  [irutils "2.0"]
                  [umls-tables "0.1.0-SNAPSHOT"]
@@ -27,8 +30,9 @@
                  [org.lpetit.ring/ring-java-servlet "0.2.0"]
                  [clj-time "0.15.2"]
                  ]
-  :dev {:dependencies [[javax.servlet/servlet-api "2.5"]]}
-  :plugins [[lein-ring "0.12.5"]]
+  :dev {:dependencies [[javax.servlet/servlet-api "2.5"]
+                       [nrepl/drawbridge "0.2.1"]]}
+  :plugins [[lein-ring "0.12.6"]]
   :ring {:handler ctb.webapp/app
          :web-xml "web.xml"}
   :repositories [["ii" "https://metamap.nlm.nih.gov/maven2/"]]
