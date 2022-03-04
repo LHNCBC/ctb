@@ -5,17 +5,23 @@
             [clojure.tools.logging :as log]
             [digest]
             [compojure.core :refer [defroutes GET POST ANY]]
-            [compojure.route :refer [resources]]
+            [compojure.route :refer [files resources]]
+            [ring.middleware.file :refer [wrap-file]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.basic-authentication :as basic]
             [ring.middleware.nested-params :refer [wrap-nested-params]]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.middleware.session :refer [wrap-session]]
+            [ring.middleware.session.cookie :refer [cookie-store]]
             [ring.middleware.cookies :refer [wrap-cookies]]
+            [ring.middleware.content-type :refer [wrap-content-type]]
+            [ring.middleware.file :refer [wrap-file]]
             [ring.util.io :refer [piped-input-stream]]
+            [ring.util.response :as r]
             [org.lpetit.ring.servlet.util :as util]
             [hiccup.util]
+            [ctb.sessions :refer [wrap-expire-sessions]]
             [ctb.manage-datasets :refer [in-whitelist
                                          map-user-datasets
                                          map-user-dataset-filename]]
@@ -48,26 +54,20 @@
                                  stream-mrconso]])
   (:import (javax.servlet ServletContext)))
 
-(defn print-var
-  [varname var]
-  (.println System/out (str varname ": " (pr-str var))))
+(defn modify-cookies
+  "remove all cookies except termtool-user"
+  [cookie-map]
+  (assoc (select-keys cookie-map ["termtool-user"])
+         :domain "nlm.nih.gov"
+         :max-age 500
+         :same-site :strict
+         :secure true))
 
-(defn authenticated? [name pass]
-  (= [name pass] [(System/getenv "AUTH_USER") (System/getenv "AUTH_PASS")]))
-
-;;  Drawbirdge handler for debugging with remote REPL (currently disabled)
-;; 
-;;      (def drawbridge-handler
-;;        (-> (cemerick.drawbridge/ring-handler)
-;;            ))
-;;
-;;      (defn wrap-drawbridge [handler]
-;;        (fn [req]
-;;          (let [handler (if (= "/repl" (:uri req))
-;;                          (basic/wrap-basic-authentication
-;;                           drawbridge-handler authenticated?)
-;;                          handler)]
-;;            (handler req))))
+(defn modify-request
+  [request]
+  ;; (let [headers 
+  (assoc request
+         :cookies (modify-cookies (:cookies request))))
 
 (defn wrap-user [handler]
   (fn [request]
@@ -83,15 +83,19 @@
     (get-appcontext request)
     (handler request)))
 
-;; Determine if initialization has already occurred by checking
-;; servlet context; if not then do any initialization and set state in
-;; servlet context.
+;; Get servlet context path and place it in request under
+;; key: :servlet-context-path
 (defn wrap-context-path [handler]
   (fn [request]
     (handle-servlet-context-path (:servlet-context-path request))
     (handler request)))
 
-  
+(defn wrap-exception-handling [handler]
+  (fn [request]
+    (try (handler request)
+      (catch Exception e
+         {:status 400
+          :body "An Error occurred."}))))
 
 ;; # Current session and cookie information
 ;;
@@ -144,29 +148,24 @@
 
   (GET "/" {cookies :cookies session :session :as request}
     (get-appcontext request)
-    (->
-     (set-session-username cookies session (termlist-submission-form request "Custom Taxonomy Builder"))
-     (assoc-in [:headers "Content-Type"] "text/html")))
+    (-> (set-session-username
+         cookies session
+         (termlist-submission-form request "Custom Taxonomy Builder"))
+        (assoc-in [:headers "Content-Type"] "text/html")))
   
   (POST "/processtermlist/" {cookies :cookies session :sessions params :params :as request}
     (let [{cmd "cmd" rawtermlist "termlist" dataset "dataset"} params
           appcontext (get-appcontext request)
           termlist (hiccup.util/escape-html rawtermlist)]
-       {:body
-        (case cmd
-          "submit"       (if (= (count (trim termlist)) 0)
-                           (user-error-message request "User Input Error: Termlist is Empty" "User Input Error: Termlist is empty.")
-                           (synset-list-page request (process-termlist appcontext dataset termlist)))
-          "synset list"  (synset-list-page request (process-termlist appcontext dataset termlist))
-          "test0"        (display-termlist request (mirror-termlist termlist))
-          "test1"        (expanded-termlist-review-page request (process-termlist appcontext dataset termlist))
-          "term->cui"    (term-cui-mapping-page request (process-termlist appcontext dataset termlist))
-          "synset table" (synset-table-page request (process-termlist appcontext dataset termlist))
-          (expanded-termlist-review-page request (process-termlist appcontext dataset termlist)) ; default
-          )
-        :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
-        :cookies cookies
-        :headers {"Content-Type" "text/html"}}))
+      {:body
+       (if (= (count (trim termlist)) 0)
+         (user-error-message
+          request
+          "User Input Error: Termlist is Empty" "User Input Error: Termlist is empty.")
+         (synset-list-page request (process-termlist appcontext dataset termlist)))
+       :session (assoc session :dataset (digest/sha-1 termlist)) ; add dataset key to session
+       :cookies cookies
+       :headers {"Content-Type" "text/html"}}))
 
   (POST "/filtertermlist/" req
     (get-appcontext req)
@@ -225,31 +224,38 @@
                                       cookies :cookies
                                       session :session
                                       :as request}
-      (get-appcontext request)
-      {:body 
-       (if (in-whitelist filename)
-         (let [user (cond
-                      (contains? session :user) (:user session)
-                      (contains? cookies "termtool-user") (-> cookies
-                                                              (get "termtool-user")
-                                                              :value)
-                      :else "NoUserName")]
-           (if (= user "NoUserName")
-             (display-error-message request "Error: no username in session or cookie!")
-             (let [^ServletContext servlet-context (:servlet-context request)
-                   workdir (if servlet-context
-                             (get-servlet-context-tempdir servlet-context)
-                             "resources/public/output")
-                   filepath (map-user-dataset-filename workdir user dataset filename)]
-               
-               (if (.exists (io/file filepath))
-                 (slurp filepath)
-                 (str "File: " filename "(" filepath ") does not exist.")
-                 ))))
-         "Invalid datasetname.")
+    (get-appcontext request)
+    (let [user (cond
+                 (contains? session :user) (:user session)
+                 (contains? cookies "termtool-user") (-> cookies
+                                                         (get "termtool-user")
+                                                         :value)
+                 :else "NoUserName")
+          ^ServletContext servlet-context (:servlet-context request)
+          workdir (if servlet-context
+                    (get-servlet-context-tempdir servlet-context)
+                    "resources/public/output")
+          filepath (map-user-dataset-filename workdir user dataset filename)
+          [body context-type]
+          (cond
+            (= user "NoUserName") (vector
+                                   (display-error-message
+                                    request "Error: session error with username!")
+                                   {"Content-Type" "text/html"})
+            
+            (and (in-whitelist filename)
+                 (.exists (io/file filepath))
+                 (nil? (index-of filepath ".."))) (vector (slurp filepath)
+                                                          {"Content-Type" "text/plain"})
+            
+            :else (vector (display-error-message
+                           request
+                           (str "File: " filename "(" filepath ") does not exist."))
+                          {"Content-Type" "text/html"}))]
+      {:body body
        :session session
        :cookies cookies
-       :headers {"Content-Type" "text/html"}})
+       :headers context-type}))
   
   ;; given a termlist in POST request skip filter step and go directly
   ;; to mrconso generation.
@@ -263,7 +269,8 @@
     ;;                         (map #(.write out %)
     ;;                              (cui-concept-map-to-mrconso-recordlist cui-concept-map))))]
     ;;   (piped-input-stream #(stream-mrconso (io/make-writer % {})))))
-    (stream-mrconso params))
+    (stream-mrconso params)
+    )
   
   ;; given a termlist in POST request skip filter step and go directly
   ;; to mrsty generation.
@@ -273,22 +280,23 @@
           cuiset (termlist-to-cuiset termlist)
           stream-mrsty (fn [out]
                          (cuicoll-to-custom-mrsty-write out cuiset))]
-      (piped-input-stream #(stream-mrsty (io/make-writer % {})))))
+      (piped-input-stream #(stream-mrsty (io/make-writer % {})))
+      ))
 
-  (resources "/")
-
-  )
+  (files "/" {:mime-types {"rrf" "text/plain"}})  
+  (resources "/" {:mime-types {"rrf" "text/plain"}})
+  (ANY "/*" req (display-error-message req "Invalid URL!"))
+)
 
 (def app 
   (-> webroutes
-      ;; wrap-drawbridge
       wrap-nested-params
       wrap-keyword-params
       wrap-params
       wrap-multipart-params
-      wrap-session
       wrap-cookies
+      wrap-session
       wrap-user
+      wrap-expire-sessions
+      wrap-exception-handling
       ))
-
-
