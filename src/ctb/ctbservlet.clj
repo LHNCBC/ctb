@@ -4,6 +4,8 @@
 (def service-method)
 
 (defn -service 
-  [servlet request response] 
-  (service-method servlet request response))
+  [servlet request response]
+  (if (nil? response)
+    "<p>The data associated with session has expired.</p>"
+    (service-method servlet request response)))
 
