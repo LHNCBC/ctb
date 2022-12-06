@@ -1,5 +1,6 @@
 (ns ctb.process
-  (:require [clojure.string :refer [join split trim lower-case]]
+  (:require [clojure.string :refer [join split trim lower-case index-of
+                                    replace-first]]
             [clojure.java.io :as io]
             [clojure.set :refer [union intersection difference]]
             [clojure.tools.logging :as log]
@@ -145,7 +146,8 @@
                                                                                   unmapped-term-expanded-cuiset))
         unmapped-term-cui-concept-map (generated-unmapped-term-cui-concept-map
                                        unmapped-term-expanded-conceptid-map)
-        merged-cui-concept-map (merge-cui-concept-maps cui-concept-map unmapped-term-cui-concept-map)
+        merged-cui-concept-map (merge-cui-concept-maps cui-concept-map
+                                                       unmapped-term-cui-concept-map)
         
         ]
     (synset/generate-term-cui-conceptinfo-map (:ivf-indexes appcontext)
@@ -182,16 +184,25 @@
       "/tmp"
       tempdir)))
 
+(defn sanitize-src-cui-derived
+  "sanitize string of form:
+       src|cui|derived "
+  [src-cui-derived]
+  (let [[srcstring cui derivedstring] (split src-cui-derived #"\|")]
+    (join "|" (vector (Encode/forCDATA srcstring)
+                      (Encode/forCDATA cui)
+                      (Encode/forCDATA derivedstring)))))
+
 (defn sanitize-params
   [params-map]
-  (->> (dissoc params-map "submit") ; remove submit before sanitizing
-       (into {} 
-             (map (fn [[k v]]
-                    (let [[srcstring cui derivedstring] (split k #"\|")]
-                      (vector (join "|" (vector (Encode/forCDATA srcstring)
-                                                (Encode/forCDATA cui)
-                                                (Encode/forCDATA derivedstring)))
-                              (Encode/forCDATA v))))))))
+  (into {} 
+        (mapv (fn [[k v]]
+               (let [k-parameter (sanitize-src-cui-derived k)]
+                 (vector k-parameter
+                         (Encode/forCDATA (str v)))))
+              ;; remove submit before sanitizing and only include "on" terms
+              (filterv #(= (second %) "on")
+                       (dissoc params-map "submit")))))
 
 (defn write-filtered-termlist
   ([req]
@@ -368,6 +379,55 @@
                    (filterv #(:directory (bean %))
                             (into [] (.listFiles ivfdir)))))))
 
+(defn is-valid-path?
+  "Is url path valid? return true if valid, false otherwise."
+  [request path]
+  (let [tempdir (get-servlet-context-tempdir (:servlet-context request))
+        cookies (:cookies request)
+        session (:session request)
+        user (cond
+               (contains? session :user) (:user session)
+               (contains? cookies "termtool-user") (-> cookies
+                                                       (get "termtool-user")
+                                                       :value)
+                      :else "NoUserName")
+        derived-path (str tempdir "/" user
+                          (replace-first path "/dataset" "/"))
+        file-exists (.exists (io/file derived-path))
+        contains-no-ellipsis (nil? (index-of derived-path ".."))]
+    ;; (.println System/out (str "path: " path))
+    ;; (.println System/out (str "tempdir: " tempdir))
+    ;; (.println System/out (str "user: " user))
+    ;; (.println System/out (str "derived-path: " derived-path))
+    ;; (.println System/out (str "file-exists: " file-exists))
+    (and file-exists contains-no-ellipsis)))
+
+(defn render-path
+  "Is url path valid? return string \"invalid-path\" if invalid, the
+  original path if valid."
+  [request path]
+  (if (is-valid-path? request path)
+    path
+    "invalid-path"))
+
+(defonce hex-pattern (re-pattern "^[\\dA-Fa-f]+$"))
+
+(defn is-hex-number?
+  "Is string a hex number?"
+  [text-string]
+  (re-find hex-pattern text-string))
+
+(def hex-map
+  #{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9
+    \A \B \C \D \E \F
+    \a \b \c \d \e \f})
+
+(defn encode-dataset-key
+  "make string a valid hex number"
+  [text-string]
+  (filter #(contains? hex-map %)
+          text-string))
+
 (defn termlist-to-cui-concept-map
   "Given a termlist, generate a synset from the umls and generate a
   cui-concept-map to be later converted to mrconso."
@@ -405,12 +465,12 @@
                     (= (-> record :str first) :suppress-set) ; from lvg
                     (concat newlist
                             (map (fn [term]
-                                   (assoc record :str term :sab "custom-lvg"))
+                                   (assoc record :str (trim term) :sab "custom-lvg"))
                                  (-> record :str second)))
                     (= (-> record :str first) :termset)
                     (concat newlist
                             (map (fn [term]
-                                   (assoc record :str term :sab "custom"))
+                                   (assoc record :str (trim term) :sab "custom"))
                                  (-> record :str second)))
                     :else newlist)     ; if not recognized, don't add it.
               (conj newlist record)))
