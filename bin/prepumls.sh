@@ -46,7 +46,7 @@ mrsty.rrf|mrstyrrf|6|0|cui|tui|stn|sty|atui|cvf|TXT|TXT|TXT|TXT|TXT|TXT
 # setenv HEAPSIZE -Xmx1500m
 export HEAPSIZE=-Xmx20000m
 #export CLASSPATH=lib/irutils-2.0-SNAPSHOT.jar
-export CLASSPATH=target/ctb-0.1.0-SNAPSHOT-standalone.jar
+export CLASSPATH=target/uberjar/ctb-0.1.2-SNAPSHOT-standalone.jar
 export PROJECTROOT=data/ivf/${DSNAME}
 
 # for dbname in mrsty mrconso mrconsostr mrstyrrf mrsat ; do
