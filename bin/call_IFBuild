@@ -1,10 +1,17 @@
-#! /bin/csh -xv
+#! /bin/csh
 # Call this script with the name of the index as the argument. (see ifconfig.)
 
-setenv DSNAME 2016AA
+if ( $# == 0 ) then
+    echo "usage: $0 data-set-name indexname"
+    exit 1
+endif
+setenv DSNAME $1
+shift
 setenv HEAPSIZE -Xmx7000m
-setenv CLASSPATH lib/irutils-2.0-SNAPSHOT.jar
+# setenv CLASSPATH lib/irutils-2.1.jar
+setenv CLASSPATH target/uberjar/ctb-0.1.3-SNAPSHOT-standalone.jar
 setenv PROJECTROOT data/ivf/${DSNAME}
+
 
 java   -Dindex.path=${PROJECTROOT}/ifindices \
        -Dtable.path=${PROJECTROOT}/tables \

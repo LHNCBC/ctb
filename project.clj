@@ -1,4 +1,4 @@
-(defproject ctb "0.1.2-SNAPSHOT"
+(defproject ctb "0.1.3-SNAPSHOT"
   :description "term -> synsets generator"
   :url "http://ii.nlm.nih.gov/"
   :license {:name "Public Domain"
@@ -8,8 +8,6 @@
                  [org.clojure/data.csv "0.1.4"]
                  [org.clojure/data.xml "0.0.8"]
                  [org.clojure/data.zip "1.0.0"]
-                 [org.slf4j/slf4j-api "1.7.32"]
-                 [org.slf4j/slf4j-nop "1.7.32"]
                  [org.clojure/tools.logging "1.2.3"]
                  [org.owasp.encoder/encoder-esapi "1.2.3"
                   :exclusions [org.owasp.esapi/esapi]]
@@ -24,7 +22,7 @@
                   :exclusions [ring/ring-codec]]
                  [ring-basic-authentication "1.1.1"]
                  [skr "0.1.2-SNAPSHOT"]
-                 [irutils "2.0"]
+                 [irutils "2.1"]
                  [umls-tables "0.1.0-SNAPSHOT"]
                  [lvgclj "0.1.0-SNAPSHOT"]
                  [org.lpetit.ring/ring-java-servlet "0.2.0"]

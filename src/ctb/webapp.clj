@@ -93,9 +93,11 @@
 (defn wrap-exception-handling [handler]
   (fn [request]
     (try (handler request)
-      (catch Exception e
-         {:status 400
-          :body "An Error occurred."}))))
+         (catch Exception e
+           (do
+             (log/error e "general error")
+             {:status 400
+              :body "An error occurred, contact the web administrator or check the log if you are running this locally."})))))
 
 ;; # Current session and cookie information
 ;;

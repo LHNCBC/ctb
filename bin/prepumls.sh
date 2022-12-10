@@ -8,6 +8,12 @@ if [ $# = 0 ]; then
 fi
 DSNAME=$1
 AWK=awk
+
+if [ ! -d data/input/${DSNAME} ]; then
+    echo "The directory data/input/${DSNAME} was not found! aborting..."
+    exit 1
+fi
+
 echo "Generating inverted index for $DSNAME."
 mkdir -p data/ivf/${DSNAME}/tables data/ivf/${DSNAME}/ifindices
 
@@ -45,8 +51,8 @@ mrsty.rrf|mrstyrrf|6|0|cui|tui|stn|sty|atui|cvf|TXT|TXT|TXT|TXT|TXT|TXT
 # build index after tables are generated
 # setenv HEAPSIZE -Xmx1500m
 export HEAPSIZE=-Xmx20000m
-#export CLASSPATH=lib/irutils-2.0-SNAPSHOT.jar
-export CLASSPATH=target/uberjar/ctb-0.1.2-SNAPSHOT-standalone.jar
+# export CLASSPATH=lib/irutils-2.1.jar
+export CLASSPATH=target/uberjar/ctb-0.1.3-SNAPSHOT-standalone.jar
 export PROJECTROOT=data/ivf/${DSNAME}
 
 # for dbname in mrsty mrconso mrconsostr mrstyrrf mrsat ; do
@@ -55,8 +61,6 @@ for dbname in mrsty mrconso mrconsostr mrstyrrf ; do
     java -Dindex.path=${PROJECTROOT}/ifindices \
 	 -Dtable.path=${PROJECTROOT}/tables \
 	 -Difbuild.lowercase.keys=true \
-	 -Difbuild.verbose=true \
-	 -Difread.mapped=true \
 	 ${HEAPSIZE} irutils.IFBuild ${dbname}
 done
 

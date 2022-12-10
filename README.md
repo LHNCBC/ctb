@@ -29,7 +29,7 @@ start the tool.
 
 ### Prepare Knowledge Sources
 
-Copy MRCONSO.RRF, MRSTY.RRF to ctb/data/input/'your data set name'/.
+Copy MRCONSO.RRF, MRSTY.RRF to ctb/data/input/*your data set name*/.
 
 In the ctb directory run:
 
@@ -39,9 +39,15 @@ For example:
 
     bin/prepumls.sh 2016AA
 
+Note: When using the GITHUB release, the name and path the standalone
+jar will vary based on version in the project.clj file and the version
+of Leiningen used, the CLASSPATH variable in the script
+bin/prepumls.sh must be modified to match the current location of the
+standalone jar (or uberjar).
+
 ### Update the system configuration file
 
-There should be a file called ctb.properties in the "config"
+There should be a file called ctb.properties in the `config`
 directory.  In ctb.properties change:
 
     ctb.ivf.dataroot: ...
@@ -63,11 +69,22 @@ Lexical Tools then add the following to the ctb.properties file:
 
 Where LVGDIR is the location of your LVG installation.
 
+### Missing directories when using GITHUB release
+
+If you are using the GITHUB release of CTB then you will need the a
+directory for the output.
+
+    mkdir -p resources/public/output
+
 ### Start up system
 
 In the top-level ctb directory run:
 
-    java -jar target/ctb-0.1.0-SNAPSHOT-standalone.jar [port]
+    java -jar target/ctb-0.1.3-SNAPSHOT-standalone.jar [port]
+
+Note: When using the GITHUB release, the name and path the standalone
+jar will vary based on version in the project.clj file and the version
+of Leiningen used.
 
 or if you have Leiningen:
 
@@ -98,8 +115,33 @@ The directory should contain the following files:
     mrconso.rrf
     mrsty.rrf
     params
-    synonymsp.checksum
+    synonyms.checksum
     termlist
+
+## For Users of the Github release
+
+You will need both [Leiningen](https://leiningen.org/) and
+[Maven](https://maven.apache.org/) to be installed.
+
+Irutils 2.1 inverted file library is necessary to use the latest
+version of CTB.  In separate directory clone, compile and install
+irutils version 2.1 into your local maven (and leiningen) repository:
+
+    $ git clone https://github.com/willjrogers/irutils.git
+	$ cd irutils/java
+	$ git branch rel2.1 rel-2.1
+	$ git checkout rel2.1
+	$ mkdir -p src/main
+	$ (cd src/main && ln -s ../../sources java)
+	$ mvn install
+
+Goto The "ctb" directory and compile and package CTB:
+
+    $ cd ctb
+	$ lein uberjar
+ 
+If the uberjar builds successfully, the steps in the usage section
+above should work normally.
 
 ## For Developers
 
@@ -109,10 +151,10 @@ If you have tomcat you can use the file
 target/ctb-0.1.0-SNAPSHOT-standalone.war to deploy the system to
 tomcat.
 
-Currently, the application expects the config directory containing
+The application now expects the config directory containing
 ctb.properties and the data directory containing the indexes to be in
-the top-level apache-tomcat directory (where directories conf,
-webapps, etc. resides)
+sub-directory war-resources before deployment using the command:  `lein
+ring uberwar`.
 
 Note: CTB has not been extensively tested in Tomcat and may require
 modification to work properly.
